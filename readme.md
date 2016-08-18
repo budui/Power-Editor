@@ -1,13 +1,24 @@
 # Power editor
 
-A powerful editor for DOS. This is a project for learning C.
+一个DOS下的~~代码~~文本编辑器。取名为`Power editor` 是因为~~它真的很强大~~我们懒得想名字。
 
-As students in HUST-AUTO we need to complete a project with C in this summer. We choose Text editor as our project. 
+此项目为某技校学生课程设计。
 
-## TO DO
+## 介绍
 
-- Input method editor
+### 1. 关键数据结构 
 
-- Basic 
+用来组织文本序列的数据结构是一个文本编辑器的重要组成部分，其用来管理负责展现正在被编辑的文件的字符序列。
 
-  ​
+
+
+  
+
+
+
+
+
+
+
+
+
