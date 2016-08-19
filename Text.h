@@ -49,7 +49,7 @@ Text *text_load(const char *filename);
 //bool text_delete(Text *txt, size_t pos, size_t len);
 void text_free(Text *txt);
 
-
+#define TEST
 
 //FOR TEST
 #ifdef TEST

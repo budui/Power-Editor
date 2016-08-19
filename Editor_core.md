@@ -274,6 +274,7 @@ static bool buffer_capacity(Buffer *buf, size_t len) {
  * a pointer to the storage location or NULL if allocation failed. */
 static const char *buffer_store(Text *txt, const char *data, size_t len) {
 	Buffer *buf = txt->buffers;
+    //(buffers为空 or 现有buffers不能容纳) and 不能分配新内存 
 	if ((!buf || !buffer_capacity(buf, len)) && !(buf = buffer_alloc(txt, len)))
 		return NULL;
 	return buffer_append(buf, data, len);
@@ -310,8 +311,8 @@ static bool buffer_insert(Buffer *buf, size_t pos, const char *data, size_t len)
 	if (buf->len == pos)
 		return buffer_append(buf, data, len);
 	char *insert = buf->data + pos;
-	memmove(insert + len, insert, buf->len - pos);
-	memcpy(insert, data, len);
+	memmove(insert + len, insert, buf->len - pos);//把插入位置以后的字符移动到len个字符后
+	memcpy(insert, data, len);//将插入内容填入空出来的位置
 	buf->len += len;
 	return true;
 }
@@ -325,8 +326,8 @@ static bool buffer_insert(Buffer *buf, size_t pos, const char *data, size_t len)
 /* cache the given piece if it is the most recently changed one */
 static void cache_piece(Text *txt, Piece *p) {
 	Buffer *buf = txt->buffers;
-	if (!buf || p->data < buf->data || p->data + p->len != buf->data + buf->len)
-		return;
+    //buffers为空||Piece指向数据不是buffers中最新申请的||Piece不是Piece链中最后一个
+	if (!buf || p->data < buf->data || p->data + p->len != buf->data + buf->len) return;
 	txt->cache = p;
 }
 ```
@@ -356,13 +357,14 @@ static bool cache_contains(Text *txt, Piece *p) {
 ```
 ####cache_insert
 ```c
-/* try to insert a junk of data at a given piece offset. the insertion is only
+/* 尝试在指定的位置插入一个区块 the insertion is only
  * performed if the piece is the most recenetly changed one. the legnth of the
  * piece, the span containing it and the whole text is adjusted accordingly */
 static bool cache_insert(Text *txt, Piece *p, size_t off, const char *data, size_t len) {
 	if (!cache_contains(txt, p))
 		return false;
 	Buffer *buf = txt->buffers;
+    //之前语句保证p->data在buf->data内，这句换算相对于buf->datawe位置
 	size_t bufpos = p->data + off - buf->data;
 	if (!buffer_insert(buf, bufpos, data, len))
 		return false;

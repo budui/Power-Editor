@@ -1,5 +1,12 @@
 #include "Text.h"
 
+#ifdef DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
+#endif // DEBUG
+
+
 
 struct Piece {
 	Text *text;             /* text to which this piece belongs */
@@ -50,8 +57,68 @@ static Buffer *buffer_mmap(Text *txt, size_t size, int fd, off_t offset);
 static void buffer_free(Buffer *buf);
 
 #ifdef TEST
+#include "Draw_List.h"
 static void test_print_buf(const char* data, size_t len);
 void test(const char *filename);
+static int test_print_piece(Piece * p);
+static void test_print_buf(const char * data, size_t len)
+{
+	size_t i;
+	printf("BUFF content:\n--------------------------\n");
+	for (i = 0; i < len; i++)
+	{
+		putchar(*(data + i));
+	}
+	printf("\n---------------------------\n");
+}
+
+void test(const char *filename)
+{
+	Text *txt = text_load(filename);
+	printf("Size: %d\n", txt->size);
+	
+	test_print_buf(txt->buf->data, txt->size);	
+	test_print_piece(&(txt->begin));
+
+	text_free(txt);
+
+}
+#define DATA_LIMITS 5
+static int test_print_piece(Piece *p)
+{	
+	FILE *fp = gv_init();
+	Piece *next;
+	int i;
+	if (!fp)
+	{
+		return 1;
+	}
+
+	for (i = 0; p; p = next,i++) {
+		char num_temp[10] = {'N'};
+		char num_temp_t[10] = { 'N' };
+		int limits = DATA_LIMITS > p->len ? p->len : DATA_LIMITS;
+		next = p->next;
+		if( i == 0)
+			write_single_node(fp, itoa(i, &num_temp[1], 10)-1, p->data, "NULL", "", limits);
+		else if(next)
+		{
+			write_single_node(fp, itoa(i, &num_temp[1], 10)-1, p->data, "", "", limits);
+			write_single_egde(fp, itoa(i - 1, &num_temp_t[1], 10)-1, itoa(i, &num_temp[1], 10)-1);
+		}
+		else
+		{
+			write_single_node(fp, itoa(i, &num_temp[1], 10) - 1, p->data, "", "NULL", limits);
+			write_single_egde(fp, itoa(i - 1, &num_temp_t[1], 10) - 1, itoa(i, &num_temp[1], 10) - 1);
+		}
+	}
+	if (!gv_close(fp))
+	{
+		return 2;
+	}
+
+	return 0;
+}
 #endif // TEST
 
 
@@ -242,21 +309,21 @@ static void buffer_free(Buffer *buf) {
 //
 //	return true;
 //}
-//
-///* A delete operation can either start/stop midway through a piece or at
-//* a boundry. In the former case a new piece is created to represent the
-//* remaining text before/after the modification point.
-//*
-//*      /-+ --> +---------+ --> +-----+ --> +-----+ --> +-\
-//*      | |     | existing|     |demo |     |text |     | |
-//*      \-+ <-- +---------+ <-- +-----+ <-- +-----+ <-- +-/
-//*                   ^                         ^
-//*                   |------ delete range -----|
-//*
-//*      /-+ --> +----+ --> +--+ --> +-\
-//*      | |     | exi|     |t |     | |
-//*      \-+ <-- +----+ <-- +--+ <-- +-/
-//*/
+
+/* A delete operation can either start/stop midway through a piece or at
+* a boundry. In the former case a new piece is created to represent the
+* remaining text before/after the modification point.
+*
+*      /-+ --> +---------+ --> +-----+ --> +-----+ --> +-\
+*      | |     | existing|     |demo |     |text |     | |
+*      \-+ <-- +---------+ <-- +-----+ <-- +-----+ <-- +-/
+*                   ^                         ^
+*                   |------ delete range -----|
+*
+*      /-+ --> +----+ --> +--+ --> +-\
+*      | |     | exi|     |t |     | |
+*      \-+ <-- +----+ <-- +--+ <-- +-/
+*/
 //bool text_delete(Text *txt, size_t pos, size_t len) {
 //	if (len == 0)
 //		return true;
@@ -386,16 +453,19 @@ out:
 }
 
 void text_free(Text *txt) {
+	Piece *next_p, *p;
+	Buffer *next_buf, *buf;
+
 	if (!txt)
 		return;
 
-	for (Piece *next, *p = txt->pieces; p; p = next) {
-		next = p->global_next;
+	for ( p = txt->pieces; p; p = next_p) {
+		next_p = p->global_next;
 		piece_free(p);
 	}
 
-	for (Buffer *next, *buf = txt->buffers; buf; buf = next) {
-		next = buf->next;
+	for ( buf = txt->buffers; buf; buf = next_buf) {
+		next_buf = buf->next;
 		buffer_free(buf);
 	}
 
@@ -403,24 +473,3 @@ void text_free(Text *txt) {
 }
 
 
-#ifdef TEST
-static void test_print_buf(const char * data, size_t len)
-{
-	size_t i;
-	for (i = 0; i < len; i++)
-	{
-		putchar(*(data + i));
-	}
-}
-
-void test(const char *filename)
-{
-	Text *txt = text_load(filename);
-	printf("Size: %d\n", txt->size);
-	printf("------------\nBUFF content:\n");
-	test_print_buf(txt->buf->data, txt->size);
-
-	text_free(txt);
-
-}
-#endif // TEST
