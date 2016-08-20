@@ -1,10 +1,10 @@
-#include "Draw_List.h"
+﻿#include "Draw_List.h"
 
 #ifdef DEBUG
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
 #include <crtdbg.h>
-#endif // DEBUG
+#endif // 用来检测内存泄漏
 
 
 
@@ -24,7 +24,7 @@ int draw_list(const char *name[], const char *data[], int n, size_t data_size)
 	{
 		return 2;
 	}
-	
+
 	return 0;
 }
 
@@ -73,7 +73,7 @@ void write_nodes_by_array(FILE *fp, const char *node_name[], const char* node_da
 	for (i = 0; i < n; ++i)
 	{
 		if (i == 0)
-			write_single_node(fp, node_name[i], node_data[i], "NULL", "",data_size);
+			write_single_node(fp, node_name[i], node_data[i], "NULL", "", data_size);
 		else if (i == n - 1)
 			write_single_node(fp, node_name[i], node_data[i], "", "NULL", data_size);
 		else

@@ -6,8 +6,7 @@
 ### Buffer
 
 ```c
-/* Buffer包含文本内容, 包括只读的缓存区和用malloc分配的堆
- */
+/* Buffer包含文本内容, 包括只读的缓存区和用malloc分配的堆*/
 struct Buffer {
 	size_t size;               /* BUFF大小 */
 	size_t len;                /* 当前位置 / 插入位置 */
@@ -79,18 +78,20 @@ struct Change {
 ### Action
 
 ```c
-/* An Action is a list of Changes which are used to undo/redo all modifications
- * since the last snapshot operation. Actions are stored in a directed graph structure.
- */
+/* Action是一个change的列表，使得编辑器可以
+*  undo/redo所有在最近的一次做快照前的change
+*  所有的Action被保存在一个有向图结构中。由于存在
+*  undo/redo，Action不是一个按时间顺序的列表，而是一颗树。
+*/
 typedef struct Action Action;
 struct Action {
-	Change *change;         /* the most recent change */
-	Action *next;           /* the next (child) action in the undo tree */
-	Action *prev;           /* the previous (parent) operation in the undo tree */
-	Action *earlier;        /* the previous Action, 按时间顺序 */
-	Action *later;          /* the next Action, 按时间顺序 */
-	time_t time;            /* when the first change of this action was performed */
-	size_t seq;             /* 唯一的严格递增的标识符 */
+	Change *change;         /* 当前change */
+	Action *next;           /* 在undo树上的子代 */
+	Action *prev;           /* 在undo树上的父辈 */
+	Action *earlier;        /* 按时间顺序的前一个Action */
+	Action *later;          /* 按时间顺序的后一个Action */
+	time_t time;            /* 这个Action的第一个change的发生时间*/
+	size_t seq;             /* 唯一的，严格递增的标识符 */
 };
 ```
 
@@ -106,18 +107,18 @@ typedef struct {
 ### Text
 
 ```c
-/* The main struct holding all information of a given file */
+/* 包含所有给定文件信息的最主要的结构体 */
 struct Text {
-	Buffer *buf;            /* original file content at the time of load operation */
-	Buffer *buffers;        /* all buffers which have been allocated to hold insertion data */
-	Piece *pieces;          /* all pieces which have been allocated, used to free them */
-	Piece *cache;           /* most recently modified piece */
+	Buffer *buf;            /* 在加载文件内容时的不可变的缓存区 */
+	Buffer *buffers;        /* 被分配来容纳插入数据的缓存区 */
+	Piece *pieces;          /* 所有被申请来的Piece, 被用来free这些Piece */
+	Piece *cache;           /* 最近被改变的Piece */
 	Piece begin, end;       /* 总是存在但不包括任何信息的哨兵节点 */
-	Action *history;        /* undo tree */
-	Action *current_action; /* action holding all file changes until a snapshot is performed */
-	Action *last_action;    /* the last action added to the tree, 按时间顺序 */
-	Action *saved_action;   /* the last action at the time of the save operation */
-	size_t size;            /* current file content size in bytes */
+	Action *history;        /* undo树 */
+	Action *current_action; /* 包括做快照前所有change的Action */
+	Action *last_action;    /* 最近被加入到undo树上的Action */
+	Action *saved_action;   /* 在保存时的最后一个Action */
+	size_t size;            /* 当前文件大小 */
 	struct stat info;       /* stat as probed at load time */
 	LineCache lines;        /* mapping between absolute pos in bytes and logical line breaks */
 	enum TextNewLine newlines; /* which type of new lines does the file use */
@@ -178,7 +179,6 @@ static Buffer *buffer_alloc(Text *txt, size_t size) {
 	txt->buffers = buf;
 	return buf;
 }
-
 ```
 
 #### buffer_read
@@ -415,26 +415,29 @@ static void span_init(Span *span, Piece *start, Piece *end) {
 #### span_swap
 
 ```c
-/* swap out an old span and replace it with a new one.
- *
- *  - if old is an empty span do not remove anything, just insert the new one
- *  - if new is an empty span do not insert anything, just remove the old one
- *
- * adjusts the document size accordingly.
- */
+/* 用新span取代旧span
+*
+*  - 如果旧span是空的，并且不移去任何东西，直接插入新span
+*  - 如果新span是空的，并且不插入任何东西，直接移去旧span
+*
+* 顺便更改txt大小信息
+*/
 static void span_swap(Text *txt, Span *old, Span *new) {
 	if (old->len == 0 && new->len == 0) {
 		return;
-	} else if (old->len == 0) {
-		/* insert new span */
+	}
+	else if (old->len == 0) {
+		/* 插入新span */
 		new->start->prev->next = new->start;
 		new->end->next->prev = new->end;
-	} else if (new->len == 0) {
-		/* delete old span */
+	}
+	else if (new->len == 0) {
+		/* 删除旧span */
 		old->start->prev->next = old->end->next;
 		old->end->next->prev = old->start->prev;
-	} else {
-		/* replace old with new */
+	}
+	else {
+		/* 用新的取代旧的 */
 		old->start->prev->next = new->start;
 		old->end->next->prev = new->end;
 	}
@@ -448,8 +451,8 @@ static void span_swap(Text *txt, Span *old, Span *new) {
 #### action_alloc
 
 ```c
-/* allocate a new action, set its pointers to the other actions in the history,
- * and set it as txt->history. All further changes will be associated with this action. */
+/* 申请分配一个新Action, 将其指针指向先前的Action,
+ * 并将其设置为 txt->history. 所有先前的Action将和这个Action关联起来 */
 static Action *action_alloc(Text *txt) {
 	Action *new = calloc(1, sizeof(Action));
 	if (!new)
@@ -457,13 +460,13 @@ static Action *action_alloc(Text *txt) {
 	new->time = time(NULL);
 	txt->current_action = new;
 
-	/* set sequence number */
+	/* 设置序列数seq */
 	if (!txt->last_action)
 		new->seq = 0;
 	else
 		new->seq = txt->last_action->seq + 1;
 
-	/* set earlier, later pointers */
+	/* 设置 earlier, later 指针 */
 	if (txt->last_action)
 		txt->last_action->later = new;
 	new->earlier = txt->last_action;
@@ -473,7 +476,7 @@ static Action *action_alloc(Text *txt) {
 		return new;
 	}
 
-	/* set prev, next pointers */
+	/* 设置 prev, next 指针 */
 	new->prev = txt->history;
 	txt->history->next = new;
 	txt->history = new;
@@ -582,8 +585,8 @@ static Location piece_get_extern(Text *txt, size_t pos) {
 ### Change类
 #### change_alloc
 ```c
-/* allocate a new change, associate it with current action or a newly
- * allocated one if none exists. */
+/* 申请分配一个新change，将其与当前Action关联，
+ * 如果当前不存在Acition，就新申请分配一个Action */
 static Change *change_alloc(Text *txt, size_t pos) {
 	Action *a = txt->current_action;
 	if (!a) {
@@ -607,7 +610,7 @@ static Change *change_alloc(Text *txt, size_t pos) {
 static void change_free(Change *c) {
 	if (!c)
 		return;
-	/* only free the new part of the span, the old one is still in use */
+	/* 只free change.new的Piece,change.old依旧使用 */
 	piece_free(c->new.start);
 	if (c->new.start != c->new.end)
 		piece_free(c->new.end);
