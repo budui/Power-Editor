@@ -44,7 +44,7 @@ typedef struct Buffer Buffer;
 
 
 
-//bool text_insert(Text *txt, size_t pos, const char *data, size_t len);
+bool text_insert(Text *txt, size_t pos, const char *data, size_t len);
 Text *text_load(const char *filename);
 //bool text_delete(Text *txt, size_t pos, size_t len);
 void text_free(Text *txt);
@@ -53,7 +53,9 @@ void text_free(Text *txt);
 
 //FOR TEST
 #ifdef TEST
-void test(const char* filename);
+void test_print_buf(const char* data, size_t len);
+void test(const char *filename);
+int test_print_piece(Piece * p);
 #endif
 
 #endif

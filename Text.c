@@ -6,8 +6,6 @@
 #include <crtdbg.h>
 #endif // DEBUG
 
-
-
 struct Piece {
 	Text *text;             /* text to which this piece belongs */
 	Piece *prev, *next;     /* pointers to the logical predecessor/successor */
@@ -54,14 +52,14 @@ static Buffer *buffer_alloc(Text *txt, size_t size);
 static const char *buffer_append(Buffer *buf, const char *data, size_t len);
 static Buffer *buffer_read(Text *txt, size_t size, int fd);
 static Buffer *buffer_mmap(Text *txt, size_t size, int fd, off_t offset);
+static const char *buffer_store(Text *txt, const char *data, size_t len);
+static bool buffer_capacity(Buffer *buf, size_t len);
 static void buffer_free(Buffer *buf);
 
 #ifdef TEST
 #include "Draw_List.h"
-static void test_print_buf(const char* data, size_t len);
-void test(const char *filename);
-static int test_print_piece(Piece * p);
-static void test_print_buf(const char * data, size_t len)
+
+void test_print_buf(const char * data, size_t len)
 {
 	size_t i;
 	printf("BUFF content:\n--------------------------\n");
@@ -76,46 +74,41 @@ void test(const char *filename)
 {
 	Text *txt = text_load(filename);
 	printf("Size: %d\n", txt->size);
-	
-	test_print_buf(txt->buf->data, txt->size);	
+	test_print_buf(txt->buf->data, txt->size);
+
+
+	text_insert(txt, 2, "----", 4);
+	text_insert(txt, 4, "123", 3);
 	test_print_piece(&(txt->begin));
-
 	text_free(txt);
-
 }
-#define DATA_LIMITS 5
-static int test_print_piece(Piece *p)
-{	
+#define DATA_LIMITS 20
+int test_print_piece(Piece *p)
+{
 	FILE *fp = gv_init();
 	Piece *next;
 	int i;
 	if (!fp)
-	{
 		return 1;
-	}
 
-	for (i = 0; p; p = next,i++) {
-		char num_temp[10] = {'N'};
+	for (i = 0; p; p = next, i++) {
+		char num_temp[10] = { 'N' };
 		char num_temp_t[10] = { 'N' };
 		int limits = DATA_LIMITS > p->len ? p->len : DATA_LIMITS;
 		next = p->next;
-		if( i == 0)
-			write_single_node(fp, itoa(i, &num_temp[1], 10)-1, p->data, "NULL", "", limits);
-		else if(next)
-		{
-			write_single_node(fp, itoa(i, &num_temp[1], 10)-1, p->data, "", "", limits);
-			write_single_egde(fp, itoa(i - 1, &num_temp_t[1], 10)-1, itoa(i, &num_temp[1], 10)-1);
+		if (i == 0)
+			write_single_node(fp, itoa(i, &num_temp[1], 10) - 1, p->data, "NULL", "", limits);
+		else if (next) {
+			write_single_node(fp, itoa(i, &num_temp[1], 10) - 1, p->data, "", "", limits);
+			write_single_egde(fp, itoa(i - 1, &num_temp_t[1], 10) - 1, itoa(i, &num_temp[1], 10) - 1);
 		}
-		else
-		{
+		else {
 			write_single_node(fp, itoa(i, &num_temp[1], 10) - 1, p->data, "", "NULL", limits);
 			write_single_egde(fp, itoa(i - 1, &num_temp_t[1], 10) - 1, itoa(i, &num_temp[1], 10) - 1);
 		}
 	}
 	if (!gv_close(fp))
-	{
 		return 2;
-	}
 
 	return 0;
 }
@@ -191,11 +184,26 @@ static Buffer *buffer_alloc(Text *txt, size_t size) {
 	return buf;
 }
 
+/* stores the given data in a buffer, allocates a new one if necessary. returns
+* a pointer to the storage location or NULL if allocation failed. */
+static const char *buffer_store(Text *txt, const char *data, size_t len) {
+	Buffer *buf = txt->buffers;
+	//(buffers为空 or 现有buffers不能容纳) and 不能分配新内存 
+	if ((!buf || !buffer_capacity(buf, len)) && !(buf = buffer_alloc(txt, len)))
+		return NULL;
+	return buffer_append(buf, data, len);
+}
+
 /* append data to buffer, assumes there is enough space available */
 static const char *buffer_append(Buffer *buf, const char *data, size_t len) {
 	char *dest = memcpy(buf->data + buf->len, data, len);
 	buf->len += len;
 	return dest;
+}
+
+/* check whether buffer has enough free space to store len bytes */
+static bool buffer_capacity(Buffer *buf, size_t len) {
+	return buf->size - buf->len >= len;
 }
 
 static Buffer *buffer_read(Text *txt, size_t size, int fd) {
@@ -236,8 +244,6 @@ static void buffer_free(Buffer *buf) {
 	free(buf);
 }
 
-
-
 /* When inserting new data there are 2 cases to consider.
 *
 *  - in the first the insertion point falls into the middle of an exisiting
@@ -265,50 +271,51 @@ static void buffer_free(Buffer *buf) {
 *      | |     |short|     | existing text |     | |
 *      \-+ <-- +-----+ <-- +---------------+ <-- +-/
 */
-//bool text_insert(Text *txt, size_t pos, const char *data, size_t len) {
-//	if (len == 0)
-//		return true;
-//	if (pos > txt->size)
-//		return false;
-//
-//	Location loc = piece_get_intern(txt, pos);
-//	Piece *p = loc.piece;
-//	if (!p)
-//		return false;
-//	size_t off = loc.off;
-//	if (cache_insert(txt, p, off, data, len))
-//		return true;
-//
-//	if (!(data = buffer_store(txt, data, len)))
-//		return false;
-//
-//	Piece *new = NULL;
-//
-//	if (off == p->len) {
-//		/* insert between two existing pieces, hence there is nothing to
-//		* remove, just add a new piece holding the extra text */
-//		if (!(new = piece_alloc(txt)))
-//			return false;
-//		piece_init(new, p, p->next, data, len);
-//	}
-//	else {
-//		/* insert into middle of an existing piece, therfore split the old
-//		* piece. that is we have 3 new pieces one containing the content
-//		* before the insertion point then one holding the newly inserted
-//		* text and one holding the content after the insertion point.
-//		*/
-//		Piece *before = piece_alloc(txt);
-//		new = piece_alloc(txt);
-//		Piece *after = piece_alloc(txt);
-//		if (!before || !new || !after)
-//			return false;
-//		piece_init(before, p->prev, new, p->data, off);
-//		piece_init(new, before, after, data, len);
-//		piece_init(after, new, p->next, p->data + off, p->len - off);
-//	}
-//
-//	return true;
-//}
+bool text_insert(Text *txt, size_t pos, const char *data, size_t len) {
+	if (len == 0)
+		return true;
+	if (pos > txt->size)
+		return false;
+
+	Location loc = piece_get_intern(txt, pos);
+	Piece *p = loc.piece;
+	if (!p)
+		return false;
+	size_t off = loc.off;
+
+	if (!(data = buffer_store(txt, data, len)))
+		return false;
+
+	Piece *new = NULL;
+
+	if (off == p->len) {
+		/* insert between two existing pieces, hence there is nothing to
+		* remove, just add a new piece holding the extra text */
+		if (!(new = piece_alloc(txt)))
+			return false;
+		piece_init(new, p, p->next, data, len);
+	}
+	else {
+		/* insert into middle of an existing piece, therfore split the old
+		* piece. that is we have 3 new pieces one containing the content
+		* before the insertion point then one holding the newly inserted
+		* text and one holding the content after the insertion point.
+		*/
+		Piece *before = piece_alloc(txt);
+		new = piece_alloc(txt);
+		Piece *after = piece_alloc(txt);
+		if (!before || !new || !after)
+			return false;
+		piece_init(before, p->prev, new, p->data, off);
+		piece_init(new, before, after, data, len);
+		piece_init(after, new, p->next, p->data + off, p->len - off);
+		//DELETE
+		p->prev->next = before;
+		p->next->prev = after;
+	}
+
+	return true;
+}
 
 /* A delete operation can either start/stop midway through a piece or at
 * a boundry. In the former case a new piece is created to represent the
@@ -411,7 +418,7 @@ Text *text_load(const char *filename) {
 	int fd = -1;
 	if (!txt)
 		return NULL;
-	
+
 	piece_init(&txt->begin, NULL, &txt->end, NULL, 0);
 	piece_init(&txt->end, &txt->begin, NULL, NULL, 0);
 
@@ -459,12 +466,12 @@ void text_free(Text *txt) {
 	if (!txt)
 		return;
 
-	for ( p = txt->pieces; p; p = next_p) {
+	for (p = txt->pieces; p; p = next_p) {
 		next_p = p->global_next;
 		piece_free(p);
 	}
 
-	for ( buf = txt->buffers; buf; buf = next_buf) {
+	for (buf = txt->buffers; buf; buf = next_buf) {
 		next_buf = buf->next;
 		buffer_free(buf);
 	}
