@@ -116,7 +116,35 @@ static void action_free(Action *a);
 
 #ifdef DEBUG
 #include "Draw_List.h"
-static int test_print_piece(Piece * p);
+static void test_print_piece(Piece * p);
+//static void test_print_change(Piece * p);
+
+bool piece_iterate(Iter *iter, void* node);
+//传给Draw_List的函数
+bool piece_iterate(Iter *iter, void* node)
+{
+	iter->prev = iter->current;
+	iter->current = iter->next;
+	iter->next = ((Piece*)node)->next;
+	iter->data = ((Piece*)node)->data;
+	iter->len = ((Piece*)node)->len;
+}
+static void test_print_piece(Piece * p)
+{
+	Iter piece_iter;
+	Iter_init(&piece_iter, p, p->prev, p->next, p->data, p->len,piece_iterate);
+	draw_node(&piece_iter);
+}
+
+
+//static void test_print_change(Change * p)
+//{
+//	Iter piece_iter;
+//	Iter_init(&piece_iter, p, p->prev, p->next, p->data, p->len, piece_iterate);
+//	draw_node(&piece_iter);
+//}
+
+//外部可见函数
 void test_print_buf(const char * data, size_t len)
 {
 	size_t i;
@@ -130,40 +158,12 @@ void test_print_buf(const char * data, size_t len)
 
 void test_show_info(Text *txt)
 {
-	printf("Size: %d\n", txt->size);
+	printf("Size: %ud\n", txt->size);
 	test_print_buf(txt->buf->data, txt->size);
 	test_print_piece(&(txt->begin));
 }
-#define DATA_LIMITS 20
-static int test_print_piece(Piece *p)
-{
-	FILE *fp = gv_init();
-	Piece *next;
-	int i;
-	if (!fp)
-		return 1;
 
-	for (i = 0; p; p = next, i++) {
-		char num_temp[10] = { 'N' };
-		char num_temp_t[10] = { 'N' };
-		int limits = DATA_LIMITS > p->len ? p->len : DATA_LIMITS;
-		next = p->next;
-		if (i == 0)
-			write_single_node(fp, itoa(i, &num_temp[1], 10) - 1, p->data, "NULL", "", limits);
-		else if (next) {
-			write_single_node(fp, itoa(i, &num_temp[1], 10) - 1, p->data, "", "", limits);
-			write_single_egde(fp, itoa(i - 1, &num_temp_t[1], 10) - 1, itoa(i, &num_temp[1], 10) - 1);
-		}
-		else {
-			write_single_node(fp, itoa(i, &num_temp[1], 10) - 1, p->data, "", "NULL", limits);
-			write_single_egde(fp, itoa(i - 1, &num_temp_t[1], 10) - 1, itoa(i, &num_temp[1], 10) - 1);
-		}
-	}
-	if (!gv_close(fp))
-		return 2;
 
-	return 0;
-}
 #endif
 
 /* 申请缓存区内存，大小为MAX(size, BUFFER_SIZE) bytes */
@@ -252,9 +252,13 @@ static void buffer_free(Buffer *buf) {
 */
 static Location piece_get_intern(Text *txt, size_t pos) {
 	size_t cur = 0;
+	Location loc;
 	for (Piece *p = &txt->begin; p->next; p = p->next) {
-		if (cur <= pos && pos <= cur + p->len)
-			return (Location) { .piece = p, .off = pos - cur };
+		if (cur <= pos && pos <= cur + p->len) {
+			loc.piece = p;
+			loc.off = pos - cur;
+			return loc;
+		}
 		cur += p->len;
 	}
 
