@@ -1,84 +1,68 @@
-﻿#ifndef __TEXT_H__ 
+#ifndef __TEXT_H__ 
 #define __TEXT_H__
 
-/* Power Editor核心，提供给外部函数均为text类（以text_开头的函数），暂时包括方便DEBUG的test类函数
-*
-*  1) 使用直接#include "Text.h"即可。
-*	  外部可用接口只有函数，任何结构体内部信息外部均无法使用，只可使用定义在此头文件的结构体的指针。
-*	  如：
-*	     Text *txt = text_load("C:\\Users\\Jinxiapu\\Desktop\\Temp\\1.txt");
-*		 text_insert(txt, 12, "fjdskl", 6);
-*		 text_free(txt);
-*     注意，使用text_load后必须text_free
-*
-*  2) 为了跨平台测试方便，根据宏__BORLANDC__，WIN32区分DOS,WINDOWS系统
+#include "Public.h"
+#include <stdlib.h>
+
+#define EPOS ((size_t)-1)         /* invalid position */
+
+/* This is the core of editor, it provides some functions to complete basic
+* editor's work. such as load file, free file, insert and delete.
+* Note:
+*	1)
+*   2) Usage: #include "Text.h"
+*   3) After all works completed, remeber to use func text_free to free
+*      all memery!
+*   4) Function when func return bool, "true" means it run correctly and
+*      "false" means it run incorrectly.
+*   5) Typically, pos means global position in bytes from start of a file.
+* coded by WangRui.
 */
 
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <stddef.h>
-#include <malloc.h>
-#include <io.h>
-#include <stdio.h>
-#include <memory.h>
-#include <time.h>
-#include "Public.h"
-
-
-
-//判断是否是文件夹
-#ifndef S_ISDIR 
-#define S_ISDIR(mode)  (((mode) & S_IFMT) == S_IFDIR)
-#endif
-
-//判断是否是一个常规文件
-#ifndef S_ISREG
-#define S_ISREG(mode)  (((mode) & S_IFMT) == S_IFREG)
-#endif
-
-//将DOS/WINODWS库函数转换为POSIX风格，方便跨平台，方便阅读
-#define stat  _stat
-#define fstat _fstat
-#define open  _open
-#define close _close
-#define read _read
-
-#ifdef __BORLANDC__
-/* 被申请来存储文件内容的缓存区区块大小，1 << 15 == 32KB ，并不知道在DOS下多少合适*/
-#define BUFFER_SIZE (1 << 15)
-/* 文件大小小于这个数字时直接将文件拷贝至内存中，大于时应该用文件映射的方式 
-* 因此前一种形式可以截断，但后一种如果截断会导致文件损坏*/
-#define BUFFER_MMAP_SIZE (1 << 20)
-/* buffer_read函数读取文本时缓存区大小*/
-#define READ_BUFF_SIZE 4096
-#endif
-
-#ifdef  WIN32
-#define BUFFER_MMAP_SIZE (1 << 23)
-#define BUFFER_SIZE (1 << 20)
-#define READ_BUFF_SIZE 4096
-#endif
-
-
+/* These structs are typically used in core.
+* but their pointers can be used outside core.
+*/
 typedef struct Text Text;
 typedef struct Piece Piece;
+typedef struct TextSave TextSave;
 
-#define EPOS ((size_t)-1) 
+/* Filerange means range in bytes from start of the file to the end. */
+typedef struct {
+	size_t start; 
+	size_t end;
+} Filerange;
 
-bool text_insert(Text *txt, size_t pos, const char *data, size_t len);
-bool text_delete(Text *txt, size_t pos, size_t len);
+/* Iterator used to iterate when do something like searching, showing... */
+typedef struct {
+	const char *start;  /* data of this piece: [start, end) */
+	const char *end;    
+	const char *text;   /* current position(start <= text < end) */
+	const Piece *piece; /* internal state do not touch! */
+	size_t pos;         
+} Iterator;
+
+
+/* Functions for reading, writing files. */
+
+/* Create a text instance populated with the given file content, if `filename'
+* is NULL the text starts out empty */
 Text *text_load(const char *filename);
+/* Release all ressources associated with this text instance */
+void text_free(Text* txt);
+/* Save the whole text to the given `filename'. Return true if succesful.
+* In which case an implicit snapshot is taken. The save might associate a
+* new inode to file. */
+//bool text_save(Text*, const char *filename);
+/* write the text content to the given file descriptor `fd'. Return the
+* number of bytes written or -1 in case there was an error. */
+//ssize_t text_write(Text*, int fd);
+
+/* Functions for editing. */
+
+
+/* Functions for re/undo. */
 void text_snapshot(Text *txt);
-void text_free(Text *txt);
 
 
-
-#ifdef DEBUG
-void test_print_buf(const char* data, size_t len);
-void test_show_info(Text *txt);
-#endif
 
 #endif

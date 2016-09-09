@@ -1,4 +1,4 @@
-﻿#ifndef __PUBLIC_H__ 
+#ifndef __PUBLIC_H__ 
 #define __PUBLIC_H__
 
 
