@@ -723,13 +723,14 @@ bool text_insert(Text *txt, size_t pos, const char *data, size_t len)
 }
 
 #ifdef DEBUG
+
 void test_print_buffer(Text *txt, FILE *log)
 {
 	Buffer *buf;
 	
 	for (buf = txt->buffers; buf ; buf = buf->next)
 	{
-		fprintf(log, "***[BUFFER CONTENT]***\n");
+		fprintf(log, "\n***[BUFFER CONTENT]***\n");
 		fprintf(log, "%.*s\n", txt->buffers->len, txt->buffers->data);
 	}
 }
@@ -750,6 +751,8 @@ void test_print_current_action(Text *txt, FILE *log)
 {
 	Change *c;
 	fprintf(log, "\n***[CHANGE CHAINS]***\n");
+	fprintf(log, "&*********&*********&************************&\n");
+	fprintf(log, "|  Type   |   Size  | Content of first piece |\n");
 	fprintf(log, "&*********&*********&************************&\n");
 	for (c = txt->current_action->change; c; c = c->next)
 	{
