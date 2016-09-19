@@ -89,6 +89,10 @@ bool text_delete(Text*, size_t pos, size_t len);
 
 删除从 `pos`开始的 `len` 个bytes 。
 
+*实现方法：*
+
+​	判断开始点和结束点分别在piece中间还是在边界，对四种情况进行分类讨论。
+
 #### text_delete_range
 
 ```c

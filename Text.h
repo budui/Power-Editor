@@ -66,7 +66,8 @@ void text_free(Text* txt);
 
 /* Functions for editing. */
 bool text_insert(Text*, size_t pos, const char *data, size_t len);
-
+bool text_delete(Text *txt, size_t pos, size_t len);
+bool text_delete_range(Text *txt, Filerange *r);
 /* Functions for re/undo. */
 void text_snapshot(Text *txt);
 

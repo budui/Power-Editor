@@ -258,6 +258,26 @@ static Buffer *buffer_read(Text *txt, size_t size, int fd)
 	return buf;
 }
 
+/* delete data from a buffer at an arbitrary position, this should only be used with
+* data of the most recently created piece. */
+static bool buffer_delete(Buffer *buf, size_t pos, size_t len) 
+{
+	char *delete;
+
+	if (pos + len > buf->len)
+		return false;
+	if (buf->len == pos) 
+	{
+		buf->len -= len;
+		return true;
+	}
+	delete = buf->data + pos;
+	memmove(delete, delete + len, buf->len - pos - len);
+	buf->len -= len;
+
+	return true;
+}
+
 static void buffer_free(Buffer *buf) 
 { 
 	if (!buf)
@@ -331,6 +351,26 @@ static bool cache_insert(Text *txt, Piece *p, size_t off, const char *data, size
 	p->len += len;
 	txt->current_action->change->new.len += len;
 	txt->size += len;
+	return true;
+}
+
+/* try to delete a junk of data at a given piece offset. the deletion is only
+* performed if the piece is the most recenetly changed one and the whole
+* affected range lies within it. the legnth of the piece, the span containing it
+* and the whole text is adjusted accordingly */
+static bool cache_delete(Text *txt, Piece *p, size_t off, size_t len) 
+{
+	Buffer *buf;
+	size_t bufpos;
+	if (!cache_contains(txt, p))
+		return false;
+	buf = txt->buffers;
+	bufpos = p->data + off - buf->data;
+	if (off + len > p->len || !buffer_delete(buf, bufpos, len))
+		return false;
+	p->len -= len;
+	txt->current_action->change->new.len -= len;
+	txt->size -= len;
 	return true;
 }
 
@@ -620,16 +660,6 @@ void text_free(Text *txt)
 	free(txt);
 }
 
-/* preserve the current text content such that it can be restored by
-* means of undo/redo operations */
-void text_snapshot(Text *txt) 
-{
-	if (txt->current_action)
-		txt->last_action = txt->current_action;
-	txt->current_action = NULL;
-	txt->cache = NULL;
-}
-
 /* When inserting new data there are 2 cases to consider.
 *
 *  1) the insertion point falls into the middle of an exisiting
@@ -722,7 +752,155 @@ bool text_insert(Text *txt, size_t pos, const char *data, size_t len)
 	return true;
 }
 
+/* A delete operation can either start/stop midway through a piece or at
+* a boundry. In the former case a new piece is created to represent the
+* remaining text before/after the modification point.
+*
+*      /-+ --> +---------+ --> +-----+ --> +-----+ --> +-\
+*      | |     | existing|     |demo |     |text |     | |
+*      \-+ <-- +---------+ <-- +-----+ <-- +-----+ <-- +-/
+*                   ^                         ^
+*                   |------ delete range -----|
+*
+*      /-+ --> +----+ --> +--+ --> +-\
+*      | |     | exi|     |t |     | |
+*      \-+ <-- +----+ <-- +--+ <-- +-/
+*/
+bool text_delete(Text *txt, size_t pos, size_t len) 
+{
+	Location loc;
+	Piece *p;
+	size_t off,cur; /* how much has already been deleted */
+	Change *c;
+	Piece *before, *after; /* unmodified pieces before/after deletion point */
+	Piece *old_start, *old_end; /* span which is removed */
+	// flag for whether split pieces in start and end. 
+	bool midway_start = false, midway_end = false; 
+	Piece *new_start = NULL, *new_end = NULL;
+	if (len == 0)
+		return true;
+	if (pos + len > txt->size)
+		return false;
+	if (pos < txt->lines.pos)
+		lineno_cache_invalidate(&txt->lines);
+
+	loc = piece_get_intern(txt, pos);
+	p = loc.piece;
+	if (!p)
+		return false;
+	off = loc.off;
+	if (cache_delete(txt, p, off, len))
+		return true;
+	
+	if (off == p->len)
+	{
+		/* deletion starts at a piece boundry */
+		cur = 0;
+		before = p;
+		old_start = p->next;
+	}
+	else 
+	{
+		/* deletion starts midway through a piece */
+		midway_start = true;
+		cur = p->len - off;
+		old_start = p;
+		before = piece_alloc(txt);
+		if (!before)
+			return false;
+	}
+
+	/* skip all pieces which fall into deletion range */
+	while (cur < len) 
+	{
+		p = p->next;
+		cur += p->len;
+	}
+
+	if (cur == len)
+	{
+		/* deletion stops at a piece boundry */
+		old_end = p;
+		after = p->next;
+	}
+	else
+	{
+		/* cur > len: deletion stops midway through a piece */
+		midway_end = true;
+		old_end = p;
+		after = piece_alloc(txt);
+		if (!after)
+			return false;
+		piece_init(after, before, p->next, p->data + p->len - (cur - len), cur - len);
+	}
+
+	if (midway_start) 
+	{
+		/* we finally know which piece follows our newly allocated before piece */
+		piece_init(before, old_start->prev, after, old_start->data, off);
+	}
+
+	
+	if (midway_start) 
+	{
+		new_start = before;
+		if (!midway_end)
+			new_end = before;
+	}
+	if (midway_end)
+	{
+		if (!midway_start)
+			new_start = after;
+		new_end = after;
+	}
+
+	c = change_alloc(txt, pos);
+	if (!c)
+		return false;
+
+	span_init(&c->new, new_start, new_end);
+	span_init(&c->old, old_start, old_end);
+	span_swap(txt, &c->old, &c->new);
+	return true;
+}
+
+bool text_range_valid(const Filerange *r) {
+	return r->start != EPOS && r->end != EPOS && r->start <= r->end;
+}
+
+size_t text_range_size(const Filerange *r) {
+	return text_range_valid(r) ? r->end - r->start : 0;
+}
+
+bool text_delete_range(Text *txt, Filerange *r) 
+{
+	if (!text_range_valid(r))
+		return false;
+	return text_delete(txt, r->start, text_range_size(r));
+}
+
+/* preserve the current text content such that it can be restored by
+* means of undo/redo operations */
+void text_snapshot(Text *txt)
+{
+	if (txt->current_action)
+		txt->last_action = txt->current_action;
+	txt->current_action = NULL;
+	txt->cache = NULL;
+}
+
 #ifdef DEBUG
+void test_print_pieces_chains(Piece *start, Piece *end, size_t lim, FILE *log);
+void test_print_pieces_chains(Piece *start, Piece *end, size_t lim, FILE *log)
+{
+	Piece *p = start;
+	while (p != end->next)
+	{
+		fprintf(log, "@ %u %.*s ", p->len, lim > p->len ? p->len : lim, p->data);
+		p = p->next;
+	}
+	fprintf(log, "\n");
+}
 
 void test_print_buffer(Text *txt, FILE *log)
 {
@@ -751,15 +929,17 @@ void test_print_current_action(Text *txt, FILE *log)
 {
 	Change *c;
 	fprintf(log, "\n***[CHANGE CHAINS]***\n");
-	fprintf(log, "&*********&*********&************************&\n");
-	fprintf(log, "|  Type   |   Size  | Content of first piece |\n");
-	fprintf(log, "&*********&*********&************************&\n");
+	fprintf(log, "&*********&*********&*******&************************&\n");
+	fprintf(log, "|  Type   |   Size  |	 pos  |     Pieces content     |\n");
+	fprintf(log, "&*********&*********&*******&************************&\n");
 	for (c = txt->current_action->change; c; c = c->next)
 	{
-		fprintf(log, "|   new   |  %5u  |  %.*s\n", c->new.len, (size_t)19 > c->new.len ? c->new.len : 19, c->new.start->data);
-		fprintf(log, "+---------+---------+------------------------+\n");
-		fprintf(log, "|   old   |  %5u  |  %.*s\n", c->old.len, (size_t)19 > c->old.len ? c->old.len : 19, c->old.start->data);
-		fprintf(log, "&*********&*********&************************&\n");
+		fprintf(log, "|   new   |  %5u  |  %3u  |  ", c->new.len, c->pos);
+		test_print_pieces_chains(c->new.start, c->new.end, 10, log);
+		fprintf(log, "+---------+---------+-------+------------------------+\n");
+		fprintf(log, "|   old   |  %5u  |  %3u  |  ", c->old.len, c->pos);
+		test_print_pieces_chains(c->old.start, c->old.end, 10, log);
+		fprintf(log, "&*********&*********&*******&************************&\n");
 	}
 }
 
