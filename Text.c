@@ -156,6 +156,8 @@ static Action *action_alloc(Text *txt);
 /* Change layer */
 static Change *change_alloc(Text *txt, size_t pos);
 static void change_free(Change *c);
+/* iterater layer */
+static bool text_iterator_init(Iterator *it, size_t pos, Piece *p, size_t off);
 
 
 
@@ -426,6 +428,37 @@ static Location piece_get_intern(Text *txt, size_t pos)
 	loc.piece = NULL;
 	return loc;
 }
+/* similiar to piece_get_intern but usable as a public API. returns the piece
+* holding the text at byte offset pos. never returns a sentinel piece.
+* it pos is the end of file (== text_size()) and the file is not empty then
+* the last piece holding data is returned.
+*/
+static Location piece_get_extern(Text *txt, size_t pos) 
+{
+	size_t cur = 0;
+	Location loc = {NULL, 0};
+	Piece *p;
+
+	if (pos > 0 && pos == txt->size) 
+	{
+		for(p = txt->begin.next; p->next->next; p = p->next)
+			;
+		loc.off = p->len;
+		loc.piece = p;
+		return loc;
+	}
+
+	for (p = txt->begin.next; p->next; p = p->next) {
+		if (cur <= pos && pos < cur + p->len) {
+			loc.off = pos - cur;
+			loc.piece = p;
+			return loc;
+		}
+		cur += p->len;
+	}
+
+	return loc;
+}
 /* Get start and end location releted to start_pos and end_pos.
 * Note:
 *   1) Since piece_get_intern is used in this function, 
@@ -603,6 +636,40 @@ static void span_swap(Text *txt, Span *old_span, Span *new_span)
 	}
 	txt->size -= old_span->len;
 	txt->size += new_span->len;
+}
+
+Iterator text_iterator_get(Text *txt, size_t pos) 
+{
+	Iterator it;
+	Location loc = piece_get_extern(txt, pos);
+	text_iterator_init(&it, pos, loc.piece, loc.off);
+	return it;
+}
+
+static bool text_iterator_init(Iterator *it, size_t pos, Piece *p, size_t off) 
+{
+	it->pos = pos;
+	it->piece = p;
+	it->start = p ? p->data : NULL;
+	it->end = p ? p->data + p->len : NULL;
+	it->text = p ? p->data + off : NULL;
+	return text_iterator_valid(it);
+}
+
+bool text_iterator_next(Iterator *it)
+{
+	return text_iterator_init(it, it->pos, it->piece ? it->piece->next : NULL, 0);
+}
+
+bool text_iterator_prev(Iterator *it)
+{
+	return text_iterator_init(it, it->pos, it->piece ? it->piece->prev : NULL, 0);
+}
+
+bool text_iterator_valid(const Iterator *it)
+{
+	/* filter out sentinel nodes */
+	return it->piece && it->piece->text;
 }
 
 /* load the given file as starting point for further editing operations.
@@ -921,17 +988,18 @@ bool text_char_map(Text *txt, size_t start , size_t len, void(*map)(char *, size
 }
 
 #ifdef DEBUG
-bool test_print_pieces_chains(Piece *start, Piece *end, size_t lim, FILE *log);
-bool test_print_pieces_chains(Piece *start, Piece *end, size_t lim, FILE *log)
+static bool test_print_span(Piece *start, Piece *end, size_t lim, FILE *log);
+static bool test_print_span(Piece *start, Piece *end, size_t lim, FILE *log)
 {
 	Piece *p = start;
 	if (!start || !end)
 	{
+		fprintf(log, "**[NULL]**\n");
 		return false;
 	}
 	while (p != end->next)
 	{
-		fprintf(log, "@ %u %.*s ", p->len, lim > p->len ? p->len : lim, p->data);
+		fprintf(log, "@ %u %.*s ", p->len, (int)(lim > p->len ? p->len : lim), p->data);
 		p = p->next;
 	}
 	fprintf(log, "\n");
@@ -957,7 +1025,7 @@ void test_print_piece(Text *txt, FILE *log)
 	for (p = txt->begin.next; p->next; p = p->next)
 	{
 		fprintf(log, "+-------+--------+---------------------+\n");
-		fprintf(log, "+   %c   +  %3u   +  %.*s\n", *(p->data), p->len, (size_t)19 > p->len ? p->len : 19,p->data);
+		fprintf(log, "+   %c   +  %3u   +  %.*s\n", *(p->data), p->len,(int)(p->len), p->data);
 	}
 	fprintf(log, "+-------+--------+---------------------+\n");
 }
@@ -971,10 +1039,10 @@ void test_print_current_action(Text *txt, FILE *log)
 	for (c = txt->current_action->change; c; c = c->next)
 	{
 		fprintf(log, "|   new   |  %5u  |  %3u  |  ", c->new.len, c->pos);
-		test_print_pieces_chains(c->new.start, c->new.end, 10, log);
+		test_print_span(c->new.start, c->new.end, 10, log);
 		fprintf(log, "+---------+---------+-------+------------------------+\n");
 		fprintf(log, "|   old   |  %5u  |  %3u  |  ", c->old.len, c->pos);
-		test_print_pieces_chains(c->old.start, c->old.end, 10, log);
+		test_print_span(c->old.start, c->old.end, 10, log);
 		fprintf(log, "&*********&*********&*******&************************&\n");
 	}
 }

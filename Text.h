@@ -74,6 +74,14 @@ bool text_delete_range(Text *txt, Filerange *r);
 void text_snapshot(Text *txt);
 
 
+/* Functions for iterating. */
+
+Iterator text_iterator_get(Text *txt, size_t pos);
+bool text_iterator_next(Iterator *it);
+bool text_iterator_prev(Iterator *it);
+/* Filter out sentinel nodes */
+bool text_iterator_valid(const Iterator *it);
+
 
 #ifdef DEBUG
 void test_print_buffer(Text *txt, FILE *log);
