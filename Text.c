@@ -148,6 +148,7 @@ static bool cache_insert(Text *txt, Piece *p, size_t off, const char *data, size
 static Piece *piece_alloc(Text *txt);
 static void piece_init(Piece *p, Piece *prev, Piece *next, const char *data, size_t len);
 static Location piece_get_intern(Text *txt, size_t pos);
+static bool piece_get_two_intern(Text *txt, size_t start_pos, size_t end_pos, Location *start_loc, Location *end_loc);
 static void piece_free(Piece *p);
 /* Acthon layer */
 static void action_free(Action *a);
@@ -425,6 +426,36 @@ static Location piece_get_intern(Text *txt, size_t pos)
 	loc.piece = NULL;
 	return loc;
 }
+/* Get start and end location releted to start_pos and end_pos.
+* Note:
+*   1) Since piece_get_intern is used in this function, 
+*	 the notes of piece_get_intern must to be read.
+*/
+static bool piece_get_two_intern(Text *txt, size_t start_pos, size_t end_pos, Location *start_loc, Location *end_loc)
+{
+	size_t cur;
+	Piece *p;
+	Location loc;
+	if ((start_pos > end_pos) || (end_pos > txt->size))
+		return false;
+
+	loc = piece_get_intern(txt, start_pos);
+	start_loc->off = loc.off;
+	start_loc->piece = loc.piece;
+
+	cur = start_pos - loc.off; // make sure cur correct.
+	for (p = loc.piece; p->next; p = p->next)
+	{
+		if (cur <= end_pos && end_pos <= cur + p->len)
+		{
+			end_loc->off = end_pos - cur;
+			end_loc->piece = p;
+			return true;
+		}
+		cur += p->len;
+	}
+	return false;
+}
 
 static void piece_free(Piece *p) 
 {
@@ -542,34 +573,36 @@ static void span_init(Span *span, Piece *start, Piece *end)
 *
 *  - if old is an empty span do not remove anything, just insert the new one
 *  - if new is an empty span do not insert anything, just remove the old one
-*
-* adjusts the document size accordingly.
+*  
+*	1. adjusts the document size accordingly.
+*   2. make sure new_span->start->prev and new_span->end->next point 
+*      at correct pieces.
 */
-static void span_swap(Text *txt, Span *old, Span *new) 
+static void span_swap(Text *txt, Span *old_span, Span *new_span) 
 {
-	if (old->len == 0 && new->len == 0) {
+	if (old_span->len == 0 && new_span->len == 0) {
 		return;
 	}
-	else if (old->len == 0) 
+	else if (old_span->len == 0) 
 	{
 		/* insert new span */
-		new->start->prev->next = new->start;
-		new->end->next->prev = new->end;
+		new_span->start->prev->next = new_span->start;
+		new_span->end->next->prev = new_span->end;
 	}
-	else if (new->len == 0) 
+	else if (new_span->len == 0) 
 	{
 		/* delete old span */
-		old->start->prev->next = old->end->next;
-		old->end->next->prev = old->start->prev;
+		old_span->start->prev->next = old_span->end->next;
+		old_span->end->next->prev = old_span->start->prev;
 	}
 	else 
 	{
 		/* replace old with new */
-		old->start->prev->next = new->start;
-		old->end->next->prev = new->end;
+		old_span->start->prev->next = new_span->start;
+		old_span->end->next->prev = new_span->end;
 	}
-	txt->size -= old->len;
-	txt->size += new->len;
+	txt->size -= old_span->len;
+	txt->size += new_span->len;
 }
 
 /* load the given file as starting point for further editing operations.
@@ -768,14 +801,9 @@ bool text_insert(Text *txt, size_t pos, const char *data, size_t len)
 */
 bool text_delete(Text *txt, size_t pos, size_t len) 
 {
-	Location loc;
-	Piece *p;
-	size_t off,cur; /* how much has already been deleted */
+	Location start_loc, end_loc;
 	Change *c;
-	Piece *before, *after; /* unmodified pieces before/after deletion point */
 	Piece *old_start, *old_end; /* span which is removed */
-	// flag for whether split pieces in start and end. 
-	bool midway_start = false, midway_end = false; 
 	Piece *new_start = NULL, *new_end = NULL;
 	if (len == 0)
 		return true;
@@ -784,75 +812,51 @@ bool text_delete(Text *txt, size_t pos, size_t len)
 	if (pos < txt->lines.pos)
 		lineno_cache_invalidate(&txt->lines);
 
-	loc = piece_get_intern(txt, pos);
-	p = loc.piece;
-	if (!p)
+
+	if (!piece_get_two_intern(txt, pos, pos + len, &start_loc, &end_loc))
 		return false;
-	off = loc.off;
-	if (cache_delete(txt, p, off, len))
+	if (cache_delete(txt, start_loc.piece, start_loc.off, len))
 		return true;
-	
-	if (off == p->len)
+
+	if ((start_loc.off == start_loc.piece->len) && (end_loc.off == end_loc.piece->len))
 	{
-		/* deletion starts at a piece boundry */
-		cur = 0;
-		before = p;
-		old_start = p->next;
+		/* deletion starts at a piece boundry and ends at a piece boundry. */
+		old_start = start_loc.piece->next;
+		old_end = end_loc.piece;
+	}
+	else if ((start_loc.off != start_loc.piece->len) && (end_loc.off == end_loc.piece->len))
+	{
+		/* deletion starts midway through a piece and ends at a piece boundry. */
+		old_start = start_loc.piece;
+		old_end = end_loc.piece;
+		new_start = piece_alloc(txt);
+		if (!new_start)
+			return false;
+		piece_init(new_start, old_start->prev, old_end->next, old_start->data, start_loc.off);
+		new_end = new_start;
+	}
+	else if ((start_loc.off == start_loc.piece->len) && (end_loc.off != end_loc.piece->len))
+	{
+		/* deletion starts at a piece boundry and ends midway through a piece. */
+		old_start = start_loc.piece->next;
+		old_end = end_loc.piece;
+		new_end = piece_alloc(txt);
+		if (!new_end)
+			return false;
+		piece_init(new_end, old_start->prev, old_end->next, old_end->data + end_loc.off, old_end->len - end_loc.off);
 	}
 	else 
 	{
-		/* deletion starts midway through a piece */
-		midway_start = true;
-		cur = p->len - off;
-		old_start = p;
-		before = piece_alloc(txt);
-		if (!before)
+		old_start = start_loc.piece;
+		old_end = end_loc.piece;
+		new_end = piece_alloc(txt);
+		new_start = piece_alloc(txt);
+		if ((!new_end) || (!new_start))
 			return false;
+		piece_init(new_end, new_start, old_end->next, old_end->data + end_loc.off, old_end->len - end_loc.off);
+		piece_init(new_start, old_start->prev, new_end, old_start->data, start_loc.off);
 	}
 
-	/* skip all pieces which fall into deletion range */
-	while (cur < len) 
-	{
-		p = p->next;
-		cur += p->len;
-	}
-
-	if (cur == len)
-	{
-		/* deletion stops at a piece boundry */
-		old_end = p;
-		after = p->next;
-	}
-	else
-	{
-		/* cur > len: deletion stops midway through a piece */
-		midway_end = true;
-		old_end = p;
-		after = piece_alloc(txt);
-		if (!after)
-			return false;
-		piece_init(after, before, p->next, p->data + p->len - (cur - len), cur - len);
-	}
-
-	if (midway_start) 
-	{
-		/* we finally know which piece follows our newly allocated before piece */
-		piece_init(before, old_start->prev, after, old_start->data, off);
-	}
-
-	
-	if (midway_start) 
-	{
-		new_start = before;
-		if (!midway_end)
-			new_end = before;
-	}
-	if (midway_end)
-	{
-		if (!midway_start)
-			new_start = after;
-		new_end = after;
-	}
 
 	c = change_alloc(txt, pos);
 	if (!c)
@@ -864,7 +868,8 @@ bool text_delete(Text *txt, size_t pos, size_t len)
 	return true;
 }
 
-bool text_range_valid(const Filerange *r) {
+bool text_range_valid(const Filerange *r) 
+{
 	return r->start != EPOS && r->end != EPOS && r->start <= r->end;
 }
 
@@ -889,17 +894,48 @@ void text_snapshot(Text *txt)
 	txt->cache = NULL;
 }
 
+bool text_char_map(Text *txt, size_t start , size_t len, void(*map)(char *, size_t len))
+{
+	Location start_loc = piece_get_intern(txt, start);
+	Piece *p;
+	size_t cur;
+	if (start + len > txt->size)
+		return false;
+	if (!(start_loc.piece))
+	{
+		return false;
+	}
+	p = start_loc.piece;
+	map(p->data + start_loc.off, p->len - start_loc.off);
+	cur = start_loc.off == p->len ? 0 : p->len - start_loc.off;
+	for (p = p->next, cur += p->len; cur < len; cur += p->len)
+	{
+		map(p->data, p->len);
+		if (!(p->next))
+			break;
+		p = p->next;
+	}
+		
+	map(p->data + (p->len - len + cur), len - cur);
+	return true;
+}
+
 #ifdef DEBUG
-void test_print_pieces_chains(Piece *start, Piece *end, size_t lim, FILE *log);
-void test_print_pieces_chains(Piece *start, Piece *end, size_t lim, FILE *log)
+bool test_print_pieces_chains(Piece *start, Piece *end, size_t lim, FILE *log);
+bool test_print_pieces_chains(Piece *start, Piece *end, size_t lim, FILE *log)
 {
 	Piece *p = start;
+	if (!start || !end)
+	{
+		return false;
+	}
 	while (p != end->next)
 	{
 		fprintf(log, "@ %u %.*s ", p->len, lim > p->len ? p->len : lim, p->data);
 		p = p->next;
 	}
 	fprintf(log, "\n");
+	return true;
 }
 
 void test_print_buffer(Text *txt, FILE *log)

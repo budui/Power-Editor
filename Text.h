@@ -42,11 +42,6 @@ typedef struct {
 	size_t pos;         
 } Iterator;
 
-#ifdef DEBUG
-void test_print_buffer(Text *txt, FILE *log);
-void test_print_piece(Text *txt, FILE *log);
-void test_print_current_action(Text *txt, FILE *log);
-#endif // DEBUG
 
 
 /* Functions for reading, writing files. */
@@ -65,12 +60,24 @@ void text_free(Text* txt);
 //ssize_t text_write(Text*, int fd);
 
 /* Functions for editing. */
+
+/* Insert len bytes starting from data at pos which has to be
+* in the interval [0, text_size(txt)] */
 bool text_insert(Text*, size_t pos, const char *data, size_t len);
+/* Delete len bytes starting from pos */
 bool text_delete(Text *txt, size_t pos, size_t len);
+/* Delete chars within filerange r. */
 bool text_delete_range(Text *txt, Filerange *r);
+
+
 /* Functions for re/undo. */
 void text_snapshot(Text *txt);
 
 
 
+#ifdef DEBUG
+void test_print_buffer(Text *txt, FILE *log);
+void test_print_piece(Text *txt, FILE *log);
+void test_print_current_action(Text *txt, FILE *log);
+#endif // DEBUG
 #endif
