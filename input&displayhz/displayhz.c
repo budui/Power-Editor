@@ -17,7 +17,7 @@ struct fonts				//adjust the function according to different hzk
 
 void hzkchoose(struct fonts *font);
 
-void displayhz(unsigned int innercode,unsigned char fontchoose,int x0,int y0,int textcolor,int bkcolor)
+void displayhz(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int y0,int textcolor,int bkcolor)
 {
 	unsigned int a=innercode;
 	unsigned long offset=0;
@@ -26,6 +26,8 @@ void displayhz(unsigned int innercode,unsigned char fontchoose,int x0,int y0,int
 	unsigned char *mat,c;
 	struct fonts font;
 	font.hzk=fontchoose;
+	if(bs==0)
+		return;
 	hzkchoose(&font);
 	if(( mat=(unsigned char*)malloc(font.bytes*sizeof(char)) )==NULL)
 	{
