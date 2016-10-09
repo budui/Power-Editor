@@ -17,7 +17,7 @@ void displayhz(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int
 unsigned int receivehz(int bs,char*pinyin,int mode);
 void displayen(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int y0,int textcolor,int bkcolor);
 void hzkchoose(struct fonts *font);
-void adjusttext(int *x,int *y,int width,int height)
+void linefeed(int *x,int *y,int width,int height)
 {
 	if(*x>getmaxx())
 	{
@@ -26,11 +26,16 @@ void adjusttext(int *x,int *y,int width,int height)
 	}
 	else if(*x<0)
 	{
-		*x=getmaxx()-width;
+		*x=getmaxx()+1-width;
 		*y-=height;
 	}
+	if(*y<height)
+	{
+		*x=0;
+		*y=height;
+	}
 }
-void displaytext(unsigned char hzk,unsigned char enzk,int x0,int y0,int textcolor,int bkcolor)
+void displaytext(unsigned char hzk,unsigned char enzk,int x0,int y0,int textcolor,int bkcolor)//返回1说明按下esc，退出
 {
 	int spckey,c,currentx=x0,currenty=y0;
 	char curlshift,prelshift,language,temp,pinyin[7]={0};
@@ -53,13 +58,24 @@ void displaytext(unsigned char hzk,unsigned char enzk,int x0,int y0,int textcolo
 			continue;
 		}//没有输入继续循环
 		c=bioskey(1);
+		if(c==283)
+			break;
 
 		if(language==0)//汉字输入法
 		{
 			curfont=&font;
 			c=receivehz(1,pinyin,0);
 			while(c==8&&strlen(pinyin)!=0)
-			c=receivehz(0,pinyin,1);
+			{
+				c=receivehz(0,pinyin,1);
+				if(strlen(pinyin)==0)///////如果拼音退到头
+				{
+					c=0;
+					break;		
+				}	
+			}
+			if(c==0)///////c值可能要改
+				continue;
 		}
 		else if(language==1)
 		{
@@ -75,7 +91,7 @@ void displaytext(unsigned char hzk,unsigned char enzk,int x0,int y0,int textcolo
 			else
 				allfont=&enfont;
 			currentx-=allfont->width;
-			adjusttext(&currentx,&currenty,allfont->width,allfont->height);
+			linefeed(&currentx,&currenty,allfont->width,allfont->height);
 			moveto(currentx,currenty);
 			if(temp==1)
 				displayen(1,' ',enfont.hzk,currentx,currenty,textcolor,bkcolor);
@@ -91,7 +107,7 @@ void displaytext(unsigned char hzk,unsigned char enzk,int x0,int y0,int textcolo
 			displayen(1,c%256,enfont.hzk,currentx,currenty,textcolor,bkcolor);	
 
 		currentx+=curfont->width;
-		adjusttext(&currentx,&currenty,curfont->width,curfont->height);
+		linefeed(&currentx,&currenty,curfont->width,curfont->height);
 		moveto(currentx,currenty);
 
 		fwrite(&language,1,1,fq);
@@ -101,7 +117,7 @@ void displaytext(unsigned char hzk,unsigned char enzk,int x0,int y0,int textcolo
 }
 void main()
 {
-	int gdriver=DETECT,gmode;
+	int gdriver=DETECT,gmode,esc;
 	initgraph(&gdriver,&gmode,"c:\\borlandc\\bgi");
 	displaytext(2,0,0,16,1,15);
 	closegraph();
