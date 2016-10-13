@@ -672,6 +672,64 @@ bool text_iterator_valid(const Iterator *it)
 	return it->piece && it->piece->text;
 }
 
+bool text_iterator_byte_get(Iterator *it, char *b) 
+{
+	if (text_iterator_valid(it)) {
+		if (it->start <= it->text && it->text < it->end) {
+			*b = *it->text;
+			return true;
+		}
+		else if (it->pos == it->piece->text->size) { /* EOF */
+			*b = '\0';
+			return true;
+		}
+	}
+	return false;
+}
+
+bool text_iterator_byte_next(Iterator *it, char *b) 
+{
+	if (!text_iterator_valid(it))
+		return false;
+	it->text++;
+	/* special case for advancement to EOF */
+	if (it->text == it->end && !it->piece->next->text) 
+	{
+		it->pos++;
+		if (b)
+			*b = '\0';
+		return true;
+	}
+	while (it->text >= it->end) 
+	{
+		if (!text_iterator_next(it))
+			return false;
+		it->text = it->start;
+	}
+	it->pos++;
+	if (b)
+		*b = *it->text;
+	return true;
+}
+
+bool text_iterator_byte_prev(Iterator *it, char *b) 
+{
+	if (!text_iterator_valid(it))
+		return false;
+	// iterate iterator previously until Iterator->text == Iterator->start
+	while (it->text == it->start) 
+	{
+		if (!text_iterator_prev(it))
+			return false;
+		it->text = it->end;
+	}
+	--it->text;
+	--it->pos;
+	if (b)
+		*b = *it->text;
+	return true;
+}
+
 /* load the given file as starting point for further editing operations.
 * to start with an empty document, pass NULL as filename. */
 Text *text_load(const char *filename) 
@@ -961,31 +1019,31 @@ void text_snapshot(Text *txt)
 	txt->cache = NULL;
 }
 
-bool text_char_map(Text *txt, size_t start , size_t len, void(*map)(char *, size_t len))
-{
-	Location start_loc = piece_get_intern(txt, start);
-	Piece *p;
-	size_t cur;
-	if (start + len > txt->size)
-		return false;
-	if (!(start_loc.piece))
-	{
-		return false;
-	}
-	p = start_loc.piece;
-	map(p->data + start_loc.off, p->len - start_loc.off);
-	cur = start_loc.off == p->len ? 0 : p->len - start_loc.off;
-	for (p = p->next, cur += p->len; cur < len; cur += p->len)
-	{
-		map(p->data, p->len);
-		if (!(p->next))
-			break;
-		p = p->next;
-	}
-		
-	map(p->data + (p->len - len + cur), len - cur);
-	return true;
-}
+//bool text_char_map(Text *txt, size_t start , size_t len, void(*map)(char *, size_t len))
+//{
+//	Location start_loc = piece_get_intern(txt, start);
+//	Piece *p;
+//	size_t cur;
+//	if (start + len > txt->size)
+//		return false;
+//	if (!(start_loc.piece))
+//	{
+//		return false;
+//	}
+//	p = start_loc.piece;
+//	map(p->data + start_loc.off, p->len - start_loc.off);
+//	cur = start_loc.off == p->len ? 0 : p->len - start_loc.off;
+//	for (p = p->next, cur += p->len; cur < len; cur += p->len)
+//	{
+//		map(p->data, p->len);
+//		if (!(p->next))
+//			break;
+//		p = p->next;
+//	}
+//		
+//	map(p->data + (p->len - len + cur), len - cur);
+//	return true;
+//}
 
 #ifdef DEBUG
 static bool test_print_span(Piece *start, Piece *end, size_t lim, FILE *log);

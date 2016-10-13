@@ -43,7 +43,6 @@ typedef struct {
 } Iterator;
 
 
-
 /* Functions for reading, writing files. */
 
 /* Create a text instance populated with the given file content, if `filename'
@@ -81,7 +80,8 @@ bool text_iterator_next(Iterator *it);
 bool text_iterator_prev(Iterator *it);
 /* Filter out sentinel nodes */
 bool text_iterator_valid(const Iterator *it);
-
+bool text_iterator_byte_next(Iterator *it, char *b);
+bool text_iterator_byte_prev(Iterator *it, char *b);
 
 #ifdef DEBUG
 void test_print_buffer(Text *txt, FILE *log);

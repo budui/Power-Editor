@@ -1,29 +1,36 @@
 #include "Text.h"
 #include <stdio.h>
 
-void  iterate(Text txt, size_t start, size_t end, bool func(Iterator it));
-
-
 int main()
 {
-	Text *txt = text_load("E:\\tools\\BC\\DISK_C\\learnc\\test.txt");
+	Text *txt = text_load("E:\\tools\\BC\\DISK_C\\learnc\\test_hz.txt");
 	FILE *fp = fopen(".\\core.log", "w");
 	Iterator it;
+	char c;
 
 	text_insert(txt, 2, "(hhhh)", 6);
 	text_insert(txt, 2, "[aa]", 4);
-	text_delete(txt, 3, 3);
+	text_delete(txt, 6, 3);
 
 	getchar();
 	it = text_iterator_get(txt, 0);
-	do
+	while (text_iterator_byte_next(&it,&c))
 	{
-		printf("%.*s",  (int)(it.end - it.start), it.start);
-	} while (text_iterator_next(&it));
-
+		if (ISGBK(c))
+		{
+			putchar('*');
+		}
+		else
+		{
+			putchar(c);
+		}
+	}
+#ifdef DEBUG
 	test_print_buffer(txt, fp);
 	test_print_piece(txt, fp);
 	test_print_current_action(txt, fp);
+#endif // DEBUG
+
 
 	text_free(txt);
 	fclose(fp);
