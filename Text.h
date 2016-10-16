@@ -75,14 +75,15 @@ void text_snapshot(Text *txt);
 
 /* Functions for iterating. */
 
-Iterator text_iterator_get(Text *txt, size_t pos);
-bool text_iterator_next(Iterator *it);
-bool text_iterator_prev(Iterator *it);
+Iterator iterator_get(Text *txt, size_t pos);
+bool iterator_next(Iterator *it);
+bool iterator_prev(Iterator *it);
 /* Filter out sentinel nodes */
-bool text_iterator_valid(const Iterator *it);
-bool text_iterator_byte_next(Iterator *it, char *b);
-bool text_iterator_byte_prev(Iterator *it, char *b);
-
+bool iterator_valid(const Iterator *it);
+bool iterator_byte_next(Iterator *it, char *b);
+bool iterator_byte_prev(Iterator *it, char *b);
+bool iterator_n_bytes_next(Iterator *it, char *b, size_t n);
+bool iterator_n_bytes_prev(Iterator *it, char *b, size_t n);
 #ifdef DEBUG
 void test_print_buffer(Text *txt, FILE *log);
 void test_print_piece(Text *txt, FILE *log);

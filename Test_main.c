@@ -8,13 +8,13 @@ int main()
 	Iterator it;
 	char c;
 
-	text_insert(txt, 2, "(hhhh)", 6);
-	text_insert(txt, 2, "[aa]", 4);
-	text_delete(txt, 6, 3);
+	text_insert(txt, 1, "bbb", 3);
+	text_insert(txt, 0, "aaa", 3);
+	
 
 	getchar();
-	it = text_iterator_get(txt, 0);
-	while (text_iterator_byte_next(&it,&c))
+	it = iterator_get(txt, 0);
+	while (iterator_byte_next(&it,&c))
 	{
 		if (ISGBK(c))
 		{

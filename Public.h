@@ -8,6 +8,6 @@ typedef int ssize_t;
 #define MIN(a, b)  ((a) > (b) ? (b) : (a))
 #define MAX(a, b)  ((a) < (b) ? (b) : (a))
 #define ISGBK(c) ((c) >> 7) 
-//#define DEBUG
+#define DEBUG
 
 #endif

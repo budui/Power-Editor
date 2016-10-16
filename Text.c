@@ -117,17 +117,6 @@ struct Text
 	enum TextNewLine newlines; /* which type of new lines does the file use */
 };
 
-struct TextSave {                  /* used to hold context between text_save_{begin,commit} calls */
-	Text *txt;                 /* text to operate on */
-	char *filename;            /* filename to save to as given to text_save_begin */
-	char *tmpname;             /* temporary name used for atomic rename(2) */
-	int fd;                    /* file descriptor to write data to using text_save_write */
-	enum {
-		TEXT_SAVE_UNKNOWN,
-		TEXT_SAVE_ATOMIC,  /* create a new file, write content, atomically rename(2) over old file */
-		TEXT_SAVE_INPLACE, /* truncate file, overwrite content (any error will result in data loss) */
-	} type;
-};
 
 /* buffer layer */
 static Buffer *buffer_truncated_read(Text *txt, size_t size, int fd);
@@ -157,7 +146,7 @@ static Action *action_alloc(Text *txt);
 static Change *change_alloc(Text *txt, size_t pos);
 static void change_free(Change *c);
 /* iterater layer */
-static bool text_iterator_init(Iterator *it, size_t pos, Piece *p, size_t off);
+static bool iterator_init(Iterator *it, size_t pos, Piece *p, size_t off);
 
 
 
@@ -638,43 +627,43 @@ static void span_swap(Text *txt, Span *old_span, Span *new_span)
 	txt->size += new_span->len;
 }
 
-Iterator text_iterator_get(Text *txt, size_t pos) 
+Iterator iterator_get(Text *txt, size_t pos) 
 {
 	Iterator it;
 	Location loc = piece_get_extern(txt, pos);
-	text_iterator_init(&it, pos, loc.piece, loc.off);
+	iterator_init(&it, pos, loc.piece, loc.off);
 	return it;
 }
 
-static bool text_iterator_init(Iterator *it, size_t pos, Piece *p, size_t off) 
+static bool iterator_init(Iterator *it, size_t pos, Piece *p, size_t off) 
 {
 	it->pos = pos;
 	it->piece = p;
 	it->start = p ? p->data : NULL;
 	it->end = p ? p->data + p->len : NULL;
 	it->text = p ? p->data + off : NULL;
-	return text_iterator_valid(it);
+	return iterator_valid(it);
 }
-
-bool text_iterator_next(Iterator *it)
+/* it->text will be equal to it->start. */
+bool iterator_next(Iterator *it)
 {
-	return text_iterator_init(it, it->pos, it->piece ? it->piece->next : NULL, 0);
+	return iterator_init(it, it->pos, it->piece ? it->piece->next : NULL, 0);
 }
 
-bool text_iterator_prev(Iterator *it)
+bool iterator_prev(Iterator *it)
 {
-	return text_iterator_init(it, it->pos, it->piece ? it->piece->prev : NULL, 0);
+	return iterator_init(it, it->pos, it->piece ? it->piece->prev : NULL, 0);
 }
 
-bool text_iterator_valid(const Iterator *it)
+bool iterator_valid(const Iterator *it)
 {
 	/* filter out sentinel nodes */
 	return it->piece && it->piece->text;
 }
 
-bool text_iterator_byte_get(Iterator *it, char *b) 
+bool iterator_byte_get(Iterator *it, char *b) 
 {
-	if (text_iterator_valid(it)) {
+	if (iterator_valid(it)) {
 		if (it->start <= it->text && it->text < it->end) {
 			*b = *it->text;
 			return true;
@@ -687,9 +676,9 @@ bool text_iterator_byte_get(Iterator *it, char *b)
 	return false;
 }
 
-bool text_iterator_byte_next(Iterator *it, char *b) 
+bool iterator_byte_next(Iterator *it, char *b) 
 {
-	if (!text_iterator_valid(it))
+	if (!iterator_valid(it))
 		return false;
 	it->text++;
 	/* special case for advancement to EOF */
@@ -700,9 +689,10 @@ bool text_iterator_byte_next(Iterator *it, char *b)
 			*b = '\0';
 		return true;
 	}
+	/* Case for iterator must be iterated without iterate it->pos. */
 	while (it->text >= it->end) 
 	{
-		if (!text_iterator_next(it))
+		if (!iterator_next(it))
 			return false;
 		it->text = it->start;
 	}
@@ -712,14 +702,41 @@ bool text_iterator_byte_next(Iterator *it, char *b)
 	return true;
 }
 
-bool text_iterator_byte_prev(Iterator *it, char *b) 
+bool iterator_n_bytes_next(Iterator *it, char *b, size_t n)
 {
-	if (!text_iterator_valid(it))
+
+	if (!iterator_valid(it))
+		return false;
+	if (it->text + n < it->end) {
+		it->text += n;
+		it->pos += n;
+		*b = *it->text;
+		return true;
+	}
+	while ( n >= 0 )
+	{
+		n -= it->end - it->start;
+		if (!iterator_next(it))
+			return false;
+		if (it->text + n < it->end && it->text > it->start) {
+			it->text += n;
+			it->pos += n;
+			*b = *it->text;
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+bool iterator_byte_prev(Iterator *it, char *b) 
+{
+	if (!iterator_valid(it))
 		return false;
 	// iterate iterator previously until Iterator->text == Iterator->start
 	while (it->text == it->start) 
 	{
-		if (!text_iterator_prev(it))
+		if (!iterator_prev(it))
 			return false;
 		it->text = it->end;
 	}
@@ -1071,7 +1088,7 @@ void test_print_buffer(Text *txt, FILE *log)
 	for (buf = txt->buffers; buf ; buf = buf->next)
 	{
 		fprintf(log, "\n***[BUFFER CONTENT]***\n");
-		fprintf(log, "%.*s\n", txt->buffers->len, txt->buffers->data);
+		fprintf(log, "%.*s\n", (int)txt->buffers->len, txt->buffers->data);
 	}
 }
 void test_print_piece(Text *txt, FILE *log)
