@@ -7,8 +7,8 @@ struct fonts
 {
 	unsigned char hzk;
 	FILE *fp;
-	unsigned char line;
-	unsigned char row;
+	unsigned char height;
+	unsigned char width;
 	unsigned int bytes;
 };
 
@@ -40,14 +40,14 @@ void displayen(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int
 	fseek(font.fp,offset,SEEK_SET);
 
 	fread(mat,1,font.bytes,font.fp);
-	y0-=font.line;
-	for(i=0;i<font.line;i++)			
+	y0-=font.height;
+	for(i=0;i<font.height;i++)			
 	{
-		for(j=0;j<font.row/8;j++)
+		for(j=0;j<font.width/8;j++)
 		{
 			for(k=0;k<8;k++)
 			{
-				c=mat[j+i*font.row/8]&(0x80>>k) ;
+				c=mat[j+i*font.width/8]&(0x80>>k) ;
 				if(c)
 				{	
 					putpixel(j*8+k+x0,y0+i,textcolor);
@@ -71,17 +71,17 @@ void enchoose(struct fonts *font)
 	{
 		case 0:
 			font->fp=fopen(".\\fonts\\asc16","rb");
-			font->line=16;font->row=8;
+			font->height=16;font->width=8;
 			break;
 		case 1:
 			font->fp=fopen(".\\fonts\\asc48","rb");
-			font->line=48;font->row=24;
+			font->height=48;font->width=24;
 			break;
 		
 		default:
 			printf("error,no such font file");
 			exit(1);
 	}
-	font->bytes=(font->line)*(font->row)/8;
+	font->bytes=(font->height)*(font->width)/8;
 	return;
 }

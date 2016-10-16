@@ -9,8 +9,8 @@ struct fonts				//adjust the function according to different hzk
 {
 	unsigned char hzk;
 	FILE *fp;
-	unsigned char line;
-	unsigned char row;
+	unsigned char height;
+	unsigned char width;
 	unsigned int bytes;// bytes every hanzi occupys in hzk file
 };
 
@@ -54,17 +54,17 @@ void displayhz(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int
 	fseek(font.fp,offset,SEEK_SET);
 
 	fread(mat,1,font.bytes,font.fp);
-	y0-=font.line;
-	for(i=0;i<font.line;i++)			
+	y0-=font.height;
+	for(i=0;i<font.height;i++)			
 	{
-		for(j=0;j<font.row/8;j++)
+		for(j=0;j<font.width/8;j++)
 		{
 			for(k=0;k<8;k++)
 			{
-				c=mat[j+i*font.row/8]&(0x80>>k) ;
+				c=mat[j+i*font.width/8]&(0x80>>k) ;
 				if(c)
 				{	
-					if(font.row==24)	//hanzi in hzk24x need to be rotated 
+					if(font.width==24)	//hanzi in hzk24x need to be rotated 
 					{
 						putpixel(x0+i,y0+j*8+k,textcolor);
 					}
@@ -75,7 +75,7 @@ void displayhz(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int
 				}
 				else
 				{
-					if(font.row==24)
+					if(font.width==24)
 					{
 						putpixel(x0+i,j*8+k+y0,bkcolor);
 					}
@@ -99,60 +99,60 @@ void hzkchoose(struct fonts *font)
 	{
 		case 0:
 			font->fp=fopen(".\\fonts\\hzk12","rb");
-			font->line=12;font->row=16;
+			font->height=12;font->width=16;
 			break;
 		case 1:
 			font->fp=fopen(".\\fonts\\hzk14","rb");
-			font->line=14;font->row=16;
+			font->height=14;font->width=16;
 			break;
 		case 2:
 			font->fp=fopen(".\\fonts\\hzk16","rb");
-			font->line=font->row=16;
+			font->height=font->width=16;
 			break;
 		case 3:
 			font->fp=fopen(".\\fonts\\hzk16f","rb");
-			font->line=font->row=16;
+			font->height=font->width=16;
 			break;
 		case 4:
 			font->fp=fopen(".\\fonts\\hzk24f","rb");
-			font->line=font->row=24;
+			font->height=font->width=24;
 			break;
 		case 5:
 			font->fp=fopen(".\\fonts\\hzk24h","rb");
-			font->line=font->row=24;
+			font->height=font->width=24;
 			break;
 		case 6:
 			font->fp=fopen(".\\fonts\\hzk24k","rb");
-			font->line=font->row=24;
+			font->height=font->width=24;
 			break;
 		case 7:
 			font->fp=fopen(".\\fonts\\hzk24s","rb");
-			font->line=font->row=24;
+			font->height=font->width=24;
 			break;
 		case 8:
 			font->fp=fopen(".\\fonts\\hzk24t","rb");
-			font->line=font->row=24;
+			font->height=font->width=24;
 			break;
 		case 9:
 			font->fp=fopen(".\\fonts\\hzk40s","rb");
-			font->line=font->row=40;
+			font->height=font->width=40;
 			break;
 		case 10:
 			font->fp=fopen(".\\fonts\\hzk40t","rb");
-			font->line=font->row=40;
+			font->height=font->width=40;
 			break;
 		case 11:
 			font->fp=fopen(".\\fonts\\hzk48s","rb");
-			font->line=font->row=48;
+			font->height=font->width=48;
 			break;
 		case 12:
 			font->fp=fopen(".\\fonts\\hzk48t","rb");
-			font->line=font->row=48;
+			font->height=font->width=48;
 			break;
 		default:
 			printf("error,no such font file");
 			exit(1);
 	}
-	font->bytes=(font->line)*(font->row)/8;
+	font->bytes=(font->height)*(font->width)/8;
 	return;
 }
