@@ -1,19 +1,12 @@
-/** Functions for print. */
-#include <stdio.h>
+#include "print.h"
 #include <graphics.h>
 #include <string.h>
 #include <malloc.h>
 #include <dos.h>
-#include <stdlib.h>
-typedef struct {
-	const char *start;  /* data of this piece: [start, end) */
-	const char *end;    
-	const char *text;   /* current position(start <= text < end) */
-	size_t pos;         
-} Iterator;
 
-typedef char  color;
-typedef int bool;
+#define HZFONT 2
+#define ENFONT 0
+
 struct fonts
 {
 	unsigned char hzk;
@@ -23,44 +16,25 @@ struct fonts
 	unsigned int bytes;
 };
 
-
-void print_wchar(const char *c,color bg, color f);
-
-
-void print_str(const char *c, size_t n, bool auto_height_feed);
-
-
-
 void hzkchoose(struct fonts *font);
-void print_str_xy(unsigned char *c, size_t n, bool auto_height_feed, int x,int y);
-
-
-bool ishz(char *c);
 void displayen(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int y0,int textcolor,int bkcolor);
-
 void displayhz(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int y0,int textcolor,int bkcolor);
-
 void enchoose(struct fonts *font);
-
 void hzkchoose(struct fonts *font);
+static void linefeed(int *x,int *y,int width,int height);
 
-void linefeed(int *x,int *y,int width,int height);
-#define HZFONT 2
-#define ENFONT 0
-#define TRUE 1
 struct fonts enfont,hzfont;
 
-typedef struct
+void print_init(int hz, int en)
 {
-    Iterator *it; //迭代器，用来保存着文本信息与屏幕信息的关联�?
-    int x, y; //光标位置
-    //一些其它的必要内容
 
-} Cursor;
+	enfont.hzk=en;
+	hzfont.hzk=hz;
+	hzkchoose(&hzfont);
+	enchoose(&enfont);
 
-//实例化一个全模块通用的变�?print_wchar, print_str函数从cursor.x,cursor.y开始输出�?
-Cursor cursor;
-void linefeed(int *x,int *y,int width,int height)
+}
+static void linefeed(int *x,int *y,int width,int height)
 {
 	if(*x>getmaxx())
 	{
@@ -78,6 +52,7 @@ void linefeed(int *x,int *y,int width,int height)
 		*y=height;
 	}
 }
+
 void displayen(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int y0,int textcolor,int bkcolor)
 {
 	unsigned int a=innercode;
@@ -93,7 +68,7 @@ void displayen(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int
 	{
 		perror("malloc");
 		exit(1);
-	}	
+	}
 	offset=(long)innercode*font.bytes;
 	if(font.fp==NULL)
 	{
@@ -104,7 +79,7 @@ void displayen(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int
 
 	fread(mat,1,font.bytes,font.fp);
 	y0-=font.height;
-	for(i=0;i<font.height;i++)			
+	for(i=0;i<font.height;i++)
 	{
 		for(j=0;j<font.width/8;j++)
 		{
@@ -112,7 +87,7 @@ void displayen(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int
 			{
 				c=mat[j+i*font.width/8]&(0x80>>k) ;
 				if(c)
-				{	
+				{
 					putpixel(j*8+k+x0,y0+i,textcolor);
 				}
 				else
@@ -140,7 +115,7 @@ void enchoose(struct fonts *font)
 			font->fp=fopen(".\\fonts\\asc48","rb");
 			font->height=48;font->width=24;
 			break;
-		
+
 		default:
 			printf("error,no such font file");
 			exit(1);
@@ -148,9 +123,6 @@ void enchoose(struct fonts *font)
 	font->bytes=(font->height)*(font->width)/8;
 	return;
 }
-
-
-
 
 void displayhz(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int y0,int textcolor,int bkcolor)
 {
@@ -179,7 +151,7 @@ void displayhz(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int
 
 	}
 	qh=a/256;
-	wh=a%256;			
+	wh=a%256;
 	offset=(long)font.bytes*(94*(qh-1)+wh-1);
 	if(font.fp==NULL)
 	{
@@ -190,7 +162,7 @@ void displayhz(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int
 
 	fread(mat,1,font.bytes,font.fp);
 	y0-=font.height;
-	for(i=0;i<font.height;i++)			
+	for(i=0;i<font.height;i++)
 	{
 		for(j=0;j<font.width/8;j++)
 		{
@@ -198,8 +170,8 @@ void displayhz(int bs,unsigned int innercode,unsigned char fontchoose,int x0,int
 			{
 				c=mat[j+i*font.width/8]&(0x80>>k) ;
 				if(c)
-				{	
-					if(font.width==24)	//hanzi in hzk24x need to be rotated 
+				{
+					if(font.width==24)	//hanzi in hzk24x need to be rotated
 					{
 						putpixel(x0+i,y0+j*8+k,textcolor);
 					}
@@ -292,25 +264,17 @@ void hzkchoose(struct fonts *font)
 	return;
 }
 
-
-bool ishz(char *c)
-{
-	if(*c>>7==1)
-		return 1;
-	return 0;
-}
-
-
-void print_str_xy(unsigned char *c, size_t n, bool auto_height_feed, int x,int y)
+void print_str_xy(const char *c, size_t n, bool auto_height_feed, int x,int y)
 {
 	int i;
 	unsigned int innercode;
 	int currentx=x,currenty=y;
+	c = (unsigned char*)c;
 	n=strlen(c);
 	for(i=0;i<n;i++)
 	{
 
-		if(*(c+i)>>7==1)
+		if(ISGBK(*(c+i)))
 		{
 			if(auto_height_feed)
 				linefeed(&currentx,&currenty,hzfont.height,hzfont.width);
@@ -329,39 +293,21 @@ void print_str_xy(unsigned char *c, size_t n, bool auto_height_feed, int x,int y
 	}
 }
 
-
-
 void print_wchar_xy(const char *c,color bg, color f, int x, int y)
 /* first char will be print at (x,y)*/
 {
-	if(ishz(c)==TRUE)
+	if(ISGBK(*c))
 		displayhz(1,c[0]*256+c[1],HZFONT,x,y,f,bg);
 	else
 		displayen(1,*c,ENFONT,x,y,f,bg);
 }
 
 void print_str(const char *c, size_t n, bool auto_height_feed)
-
 {
 	print_str_xy(c, n, auto_height_feed, cursor.x,cursor.y);
 }
 
-
-
 void print_wchar(const char *c,color bg, color f)
 {
 	print_wchar_xy(c,bg,f,cursor.x, cursor.y);
-}
-void main()
-{
-	int gdriver=DETECT,gmode;
-	char *c="sdfaaass��";
-	enfont.hzk=0;
-	hzfont.hzk=2;
-	hzkchoose(&hzfont);
-	enchoose(&enfont);
-	initgraph(&gdriver,&gmode,"c:\\borlandc\\bgi");
-	print_str_xy(c,3,1,16,16);
-	getch();
-	closegraph();
 }
