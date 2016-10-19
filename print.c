@@ -27,12 +27,10 @@ struct fonts enfont,hzfont;
 
 void print_init(int hz, int en)
 {
-
 	enfont.hzk=en;
 	hzfont.hzk=hz;
 	hzkchoose(&hzfont);
 	enchoose(&enfont);
-
 }
 static void linefeed(int *x,int *y,int width,int height)
 {
@@ -267,28 +265,27 @@ void hzkchoose(struct fonts *font)
 void print_str_xy(const char *c, size_t n, bool auto_height_feed, int x,int y)
 {
 	int i;
+	unsigned char* ctemp = (unsigned char*)c;
 	unsigned int innercode;
-	int currentx=x,currenty=y;
-	c = (unsigned char*)c;
-	n=strlen(c);
+    cursor.x = x;
+    cursor.y = y;
 	for(i=0;i<n;i++)
 	{
-
-		if(ISGBK(*(c+i)))
+		if(ISGBK(*(ctemp+i)))
 		{
 			if(auto_height_feed)
-				linefeed(&currentx,&currenty,hzfont.height,hzfont.width);
-			innercode=c[i]*256+c[i+1];
-			displayhz(1,innercode,HZFONT,currentx,currenty,1,15);
-			i++;
-			currentx+=hzfont.width;
+				linefeed(&cursor.x,&cursor.y,hzfont.height,hzfont.width);
+			innercode=ctemp[i]*256+ctemp[i+1];
+			displayhz(1,innercode,HZFONT,cursor.x,cursor.y,1,15);
+			i+=1;
+			cursor.x+=hzfont.width;
 		}
 		else
 		{
 			if(auto_height_feed)
-				linefeed(&currentx,&currenty,enfont.height,enfont.width);
-			displayen(1,c[i],ENFONT,currentx,currenty,1,15);
-			currentx+=enfont.width;
+				linefeed(&cursor.x,&cursor.y,enfont.height,enfont.width);
+			displayen(1,ctemp[i],ENFONT,cursor.x,cursor.y,1,15);
+			cursor.x+=enfont.width;
 		}
 	}
 }
@@ -296,10 +293,22 @@ void print_str_xy(const char *c, size_t n, bool auto_height_feed, int x,int y)
 void print_wchar_xy(const char *c,color bg, color f, int x, int y)
 /* first char will be print at (x,y)*/
 {
+    unsigned char *ctemp = (unsigned char *)c;
+    cursor.x = x;
+    cursor.y = y;
 	if(ISGBK(*c))
-		displayhz(1,c[0]*256+c[1],HZFONT,x,y,f,bg);
+	{
+        displayhz(1,ctemp[0]*256+ctemp[1],HZFONT,x,y,f,bg);
+        cursor.x+=hzfont.width;
+	}
+		
 	else
-		displayen(1,*c,ENFONT,x,y,f,bg);
+	{
+        displayen(1,*ctemp,ENFONT,x,y,f,bg);
+        cursor.x+=enfont.width;
+	}
+		
+	
 }
 
 void print_str(const char *c, size_t n, bool auto_height_feed)
