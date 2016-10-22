@@ -4,7 +4,8 @@
 #include <errno.h>
 #include <time.h>
 #include <string.h>
-#include "Text.h"
+#include <stdint.h>
+#include "text.h"
 
 /* Allocate buffers holding the actual file content in junks of size: */
 #define BUFFER_SIZE ((size_t) 1 << 13)
@@ -230,7 +231,7 @@ static Buffer *buffer_read(Text *txt, size_t size, int fd)
 	while (size > 0) 
 	{
 		char data[READ_BUFF_SIZE];
-		ssize_t len = read(fd, data, MIN(sizeof(data), size));
+		int len = read(fd, data, MIN(sizeof(data), size));
 		// read failed.
 		if (len == -1) 
 		{
