@@ -148,7 +148,7 @@ void adjusttext(int x0,int y0,int length0,int height,struct fonts *font,void *ch
 	}
 	currenty=y0;
 	i=0;
-	while(i<=height)
+	while(i<height)
 	{
 		currenty=y0+i;
 		getimage(0,currenty-font->height,xmax,currenty,a);
@@ -164,7 +164,7 @@ void adjusttext(int x0,int y0,int length0,int height,struct fonts *font,void *ch
 		}
 			i+=font->height;
 	}
-	if(length<0&&height>0)
+	if(length0<0&&height>0)
 		putimage(0,y0-font->height,b,COPY_PUT);
 	free(a);
 	free(b);
