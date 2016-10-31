@@ -1,17 +1,15 @@
 #ifndef __TEXT_H__ 
 #define __TEXT_H__
 
-#include "Public.h"
+#include "util.h"
 #include <stdlib.h>
 #include <stdio.h>
-
-#define EPOS ((size_t)-1)         /* invalid position */
 
 /* This is the core of editor, it provides some functions to complete basic
 * editor's work. such as load file, free file, insert and delete.
 * Note:
 *	1)
-*   2) Usage: #include "Text.h"
+*   2) Usage: #include "text.h"
 *   3) After all works completed, remeber to use func text_free to free
 *      all memery!
 *   4) Function when func return bool, "true" means it run correctly and
@@ -19,6 +17,8 @@
 *   5) Typically, pos means global position in bytes from start of a file.
 * coded by WangRui.
 */
+
+#define EPOS ((size_t)-1)         /* invalid position */
 
 /* These structs are typically used in core.
 * but their pointers can be used outside core.
@@ -84,9 +84,10 @@ bool iterator_byte_next(Iterator *it, char *b);
 bool iterator_byte_prev(Iterator *it, char *b);
 bool iterator_n_bytes_next(Iterator *it, char *b, size_t n);
 bool iterator_n_bytes_prev(Iterator *it, char *b, size_t n);
+
 #ifdef DEBUG
-void test_print_buffer(Text *txt, FILE *log);
-void test_print_piece(Text *txt, FILE *log);
-void test_print_current_action(Text *txt, FILE *log);
+void test_print_buffer(Text *txt);
+void test_print_piece(Text *txt);
+void test_print_current_action(Text *txt);
 #endif // DEBUG
 #endif

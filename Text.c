@@ -4,7 +4,7 @@
 #include <errno.h>
 #include <time.h>
 #include <string.h>
-#include <stdint.h>
+
 #include "text.h"
 
 /* Allocate buffers holding the actual file content in junks of size: */
@@ -1037,89 +1037,68 @@ void text_snapshot(Text *txt)
 	txt->cache = NULL;
 }
 
-//bool text_char_map(Text *txt, size_t start , size_t len, void(*map)(char *, size_t len))
-//{
-//	Location start_loc = piece_get_intern(txt, start);
-//	Piece *p;
-//	size_t cur;
-//	if (start + len > txt->size)
-//		return false;
-//	if (!(start_loc.piece))
-//	{
-//		return false;
-//	}
-//	p = start_loc.piece;
-//	map(p->data + start_loc.off, p->len - start_loc.off);
-//	cur = start_loc.off == p->len ? 0 : p->len - start_loc.off;
-//	for (p = p->next, cur += p->len; cur < len; cur += p->len)
-//	{
-//		map(p->data, p->len);
-//		if (!(p->next))
-//			break;
-//		p = p->next;
-//	}
-//		
-//	map(p->data + (p->len - len + cur), len - cur);
-//	return true;
-//}
 
 #ifdef DEBUG
-static bool test_print_span(Piece *start, Piece *end, size_t lim, FILE *log);
-static bool test_print_span(Piece *start, Piece *end, size_t lim, FILE *log)
+
+/* if set debug mode, open log file to recode log. */
+extern FILE * logfile;
+
+static bool test_print_span(Piece *start, Piece *end, size_t lim);
+static bool test_print_span(Piece *start, Piece *end, size_t lim)
 {
 	Piece *p = start;
 	if (!start || !end)
 	{
-		fprintf(log, "**[NULL]**\n");
+		fprintf(logfile, "**[NULL]**\n");
 		return false;
 	}
 	while (p != end->next)
 	{
-		fprintf(log, "@ %u %.*s ", p->len, (int)(lim > p->len ? p->len : lim), p->data);
+		fprintf(logfile, "@ %u %.*s ", p->len, (int)(lim > p->len ? p->len : lim), p->data);
 		p = p->next;
 	}
-	fprintf(log, "\n");
+	fprintf(logfile, "\n");
 	return true;
 }
 
-void test_print_buffer(Text *txt, FILE *log)
+void test_print_buffer(Text *txt)
 {
 	Buffer *buf;
 	
 	for (buf = txt->buffers; buf ; buf = buf->next)
 	{
-		fprintf(log, "\n***[BUFFER CONTENT]***\n");
-		fprintf(log, "%.*s\n", (int)txt->buffers->len, txt->buffers->data);
+		fprintf(logfile, "\n***[BUFFER CONTENT]***\n");
+		fprintf(logfile, "%.*s\n", (int)txt->buffers->len, txt->buffers->data);
 	}
 }
-void test_print_piece(Text *txt, FILE *log)
+void test_print_piece(Text *txt)
 {
 	Piece *p;
-	fprintf(log, "\n***[PIECE CHAINS]***\n");
-	fprintf(log, "+-------+--------+---------------------+\n");
-	fprintf(log, "| start | length |       content       |\n");
+	fprintf(logfile, "\n***[PIECE CHAINS]***\n");
+	fprintf(logfile, "+-------+--------+---------------------+\n");
+	fprintf(logfile, "| start | length |       content       |\n");
 	for (p = txt->begin.next; p->next; p = p->next)
 	{
-		fprintf(log, "+-------+--------+---------------------+\n");
-		fprintf(log, "+   %c   +  %3u   +  %.*s\n", *(p->data), p->len,(int)(p->len), p->data);
+		fprintf(logfile, "+-------+--------+---------------------+\n");
+		fprintf(logfile, "+   %c   +  %3u   +  %.*s\n", *(p->data), p->len,(int)(p->len), p->data);
 	}
-	fprintf(log, "+-------+--------+---------------------+\n");
+	fprintf(logfile, "+-------+--------+---------------------+\n");
 }
-void test_print_current_action(Text *txt, FILE *log)
+void test_print_current_action(Text *txt)
 {
 	Change *c;
-	fprintf(log, "\n***[CHANGE CHAINS]***\n");
-	fprintf(log, "&*********&*********&*******&************************&\n");
-	fprintf(log, "|  Type   |   Size  |	 pos  |     Pieces content     |\n");
-	fprintf(log, "&*********&*********&*******&************************&\n");
+	fprintf(logfile, "\n***[CHANGE CHAINS]***\n");
+	fprintf(logfile, "&*********&*********&*******&************************&\n");
+	fprintf(logfile, "|  Type   |   Size  |	 pos  |     Pieces content     |\n");
+	fprintf(logfile, "&*********&*********&*******&************************&\n");
 	for (c = txt->current_action->change; c; c = c->next)
 	{
-		fprintf(log, "|   new   |  %5u  |  %3u  |  ", c->new.len, c->pos);
-		test_print_span(c->new.start, c->new.end, 10, log);
-		fprintf(log, "+---------+---------+-------+------------------------+\n");
-		fprintf(log, "|   old   |  %5u  |  %3u  |  ", c->old.len, c->pos);
-		test_print_span(c->old.start, c->old.end, 10, log);
-		fprintf(log, "&*********&*********&*******&************************&\n");
+		fprintf(logfile, "|   new   |  %5u  |  %3u  |  ", c->new.len, c->pos);
+		test_print_span(c->new.start, c->new.end, 10);
+		fprintf(logfile, "+---------+---------+-------+------------------------+\n");
+		fprintf(logfile, "|   old   |  %5u  |  %3u  |  ", c->old.len, c->pos);
+		test_print_span(c->old.start, c->old.end, 10);
+		fprintf(logfile, "&*********&*********&*******&************************&\n");
 	}
 }
 
