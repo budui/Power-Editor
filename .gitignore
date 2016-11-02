@@ -247,3 +247,4 @@ ModelManifest.xml
 *.vcxproj
 *.filters
 /Graph.gv
+main.c

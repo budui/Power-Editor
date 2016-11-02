@@ -53,10 +53,11 @@ void text_free(Text* txt);
 /* Save the whole text to the given `filename'. Return true if succesful.
 * In which case an implicit snapshot is taken. The save might associate a
 * new inode to file. */
-//bool text_save(Text*, const char *filename);
+bool text_save(Text*, const char *filename);
 /* write the text content to the given file descriptor `fd'. Return the
 * number of bytes written or -1 in case there was an error. */
-//ssize_t text_write(Text*, int fd);
+int text_write(Text*, int fd);
+int text_write_range(Text *txt, Filerange *range, int fd);
 
 /* Functions for editing. */
 
@@ -68,22 +69,28 @@ bool text_delete(Text *txt, size_t pos, size_t len);
 /* Delete chars within filerange r. */
 bool text_delete_range(Text *txt, Filerange *r);
 
+size_t text_range_size(const Filerange *r);
+size_t text_size(Text *txt);
 
 /* Functions for re/undo. */
 void text_snapshot(Text *txt);
-
+/* undo/redo to the last snapshotted state. returns the position where
+* the change occured or EPOS if nothing could be {un,re}done. */
+size_t text_undo(Text*);
+size_t text_redo(Text*);
 
 /* Functions for iterating. */
 
 Iterator iterator_get(Text *txt, size_t pos);
+
 bool iterator_next(Iterator *it);
 bool iterator_prev(Iterator *it);
+
 /* Filter out sentinel nodes */
 bool iterator_valid(const Iterator *it);
+
 bool iterator_byte_next(Iterator *it, char *b);
 bool iterator_byte_prev(Iterator *it, char *b);
-bool iterator_n_bytes_next(Iterator *it, char *b, size_t n);
-bool iterator_n_bytes_prev(Iterator *it, char *b, size_t n);
 
 #ifdef DEBUG
 void test_print_buffer(Text *txt);
