@@ -6,14 +6,10 @@
 #include <string.h>
 
 #include "text.h"
-
+#include "config.h"
 /* Allocate buffers holding the actual file content in junks of size: */
 #define BUFFER_SIZE ((size_t) 1 << 13)
-/* Files smaller than this value will be load into memory, larger one will be
-* truncated.
-*/
-#define BUFFER_TRUNCATE_SIZE ((size_t) 1 << 15)
-// TODO: try to find best size for reading file.
+
 /* buffer size for reading file content into memory in function buffer_read. */
 #define READ_BUFF_SIZE ((size_t) 1 << 8)
 
@@ -115,10 +111,17 @@ struct Text
 	size_t size;            /* current file content size in bytes */
 	struct stat info;       /* stat as probed at load time */
 	LineCache lines;        /* mapping between absolute pos in bytes and logical line breaks */
-	enum TextNewLine newlines; /* which type of new lines does the file use */
+};
+
+struct TextSave {                  /* used to hold context between text_save_{begin,commit} calls */
+	Text *txt;                 /* text to operate on */
+	char *filename;            /* filename to save to as given to text_save_begin */
+	char *tmpname;             /* temporary name */
+	int fd;                    /* file descriptor to write data to using text_save_write */
 };
 
 
+static int write_all(int fd, const char *buf, size_t count);
 /* buffer layer */
 static Buffer *buffer_truncated_read(Text *txt, size_t size, int fd);
 static Buffer *buffer_alloc(Text *txt, size_t size);
@@ -148,7 +151,25 @@ static Change *change_alloc(Text *txt, size_t pos);
 static void change_free(Change *c);
 /* iterater layer */
 static bool iterator_init(Iterator *it, size_t pos, Piece *p, size_t off);
+static void span_swap(Text *txt, Span *old_span, Span *new_span);
 
+
+/* write len chars from buf into fd file. */
+static int write_all(int fd, const char *buf, size_t len) 
+{
+	size_t rem = len;
+	while (rem > 0) 
+	{
+		int written = write(fd, buf, rem);
+		if (written < 0) 
+			return -1;
+		else if (written == 0)
+			break;
+		rem -= written;
+		buf += written;
+	}
+	return len - rem;
+}
 
 
 // TODO: think out a plan to deal with large file.
@@ -165,6 +186,7 @@ static Buffer *buffer_alloc(Text *txt, size_t size)
 	Buffer *buf = calloc(1, sizeof(Buffer));
 	if (!buf)
 		return NULL;
+	// keep buffer size >= BUFFER_SIZE
 	if (BUFFER_SIZE > size)
 		size = BUFFER_SIZE;
 	if (!(buf->data = malloc(size)))
@@ -199,28 +221,16 @@ static bool buffer_capacity(Buffer *buf, size_t len)
 static const char *buffer_store(Text *txt, const char *data, size_t len) 
 {
 	Buffer *buf = txt->buffers;
-	// when buf == NULL or buffer can't not contains data, run buffer_alloc.
-	if ((!buf || !buffer_capacity(buf, len)) && !(buf = buffer_alloc(txt, len)))
-		return NULL;
+	// if buf == NULL or buffer can't not contains data, alloc a new buffer.
+	if (!buf || !buffer_capacity(buf, len)) 
+	{
+		if (!(buf = buffer_alloc(txt, len)))
+			return NULL;
+	}
+
 	return buffer_append(buf, data, len);
 }
 
-/* insert data into buffer at an arbitrary position, this should only 
-* be used with data of the most recently created piece. 
-*/ 
-static bool buffer_insert(Buffer *buf, size_t pos, const char *data, size_t len) 
-{
-	char *insert;
-	if (pos > buf->len || !buffer_capacity(buf, len))
-		return false;
-	if (buf->len == pos)
-		return (bool) buffer_append(buf, data, len);
-	insert = buf->data + pos;
-	memmove(insert + len, insert, buf->len - pos);
-	memcpy(insert, data, len);
-	buf->len += len;
-	return true;
-}
 
 /* Read content of file to memery with buffer.*/
 static Buffer *buffer_read(Text *txt, size_t size, int fd) 
@@ -251,11 +261,29 @@ static Buffer *buffer_read(Text *txt, size_t size, int fd)
 	return buf;
 }
 
+/* insert data into buffer at an arbitrary position, this should only
+* be used with data of the most recently created piece. because the most
+* recently created piece's buffer may not contains so many data.
+*/
+static bool buffer_insert(Buffer *buf, size_t pos, const char *data, size_t len)
+{
+	char *insert; // insert point.
+	if (pos > buf->len || !buffer_capacity(buf, len))
+		return false;
+	if (buf->len == pos)
+		return (bool)buffer_append(buf, data, len);
+	insert = buf->data + pos;
+	memmove(insert + len, insert, buf->len - pos);
+	memcpy(insert, data, len);
+	buf->len += len;
+	return true;
+}
+
 /* delete data from a buffer at an arbitrary position, this should only be used with
 * data of the most recently created piece. */
 static bool buffer_delete(Buffer *buf, size_t pos, size_t len) 
 {
-	char *delete;
+	char *delete; //delete point.
 
 	if (pos + len > buf->len)
 		return false;
@@ -277,10 +305,9 @@ static void buffer_free(Buffer *buf)
 		return;
 	if (buf->type == HEAP)
 		free(buf->data);
-	else if ((buf->type == FARMEM || buf->type == FILESWP) && buf->data)
-		// TODO: think out a plan to free buff when buffer'type is FAR or FILESWP
+	else if ((buf->type == FARMEM) && buf->data)
+		//farfree(buf->data);
 		;
-
 	free(buf);
 }
 
@@ -373,6 +400,7 @@ static Piece *piece_alloc(Text *txt)
 	if (!p)
 		return NULL;
 	p->text = txt;
+	// set txt->piece with new piece.
 	p->global_next = txt->pieces;
 	if (txt->pieces)
 		txt->pieces->global_prev = p;
@@ -540,6 +568,36 @@ static void action_free(Action *a)
 	free(a);
 }
 
+/* undo all change linked with action. */
+static size_t action_undo(Text *txt, Action *a) 
+{
+	size_t pos = EPOS;
+	Change *c = a->change;
+	for (; c; c = c->next) 
+	{
+		span_swap(txt, &c->new, &c->old);
+		pos = c->pos;
+	}
+	return pos;
+}
+
+
+static size_t action_redo(Text *txt, Action *a) 
+{
+	size_t pos = EPOS;
+	Change *c = a->change;
+	while (c->next)
+		c = c->next;
+	for (; c; c = c->prev) 
+	{
+		span_swap(txt, &c->old, &c->new);
+		pos = c->pos;
+		if (c->new.len > c->old.len)
+			pos += c->new.len - c->old.len;
+	}
+	return pos;
+}
+
 /* allocate a new action, set its pointers 
 * to the other actions in the history,
 * and set it as txt->history. All further 
@@ -703,33 +761,6 @@ bool iterator_byte_next(Iterator *it, char *b)
 	return true;
 }
 
-bool iterator_n_bytes_next(Iterator *it, char *b, size_t n)
-{
-
-	if (!iterator_valid(it))
-		return false;
-	if (it->text + n < it->end) {
-		it->text += n;
-		it->pos += n;
-		*b = *it->text;
-		return true;
-	}
-	while ( n >= 0 )
-	{
-		n -= it->end - it->start;
-		if (!iterator_next(it))
-			return false;
-		if (it->text + n < it->end && it->text > it->start) {
-			it->text += n;
-			it->pos += n;
-			*b = *it->text;
-			return true;
-		}
-	}
-	
-	return false;
-}
-
 bool iterator_byte_prev(Iterator *it, char *b) 
 {
 	if (!iterator_valid(it))
@@ -768,7 +799,7 @@ Text *text_load(const char *filename)
 		if (fstat(fd, &txt->info) == -1)
 			goto out;
 		size = txt->info.st_size;
-		if (size < BUFFER_TRUNCATE_SIZE)
+		if (size < CONFIG_FILE_TRUNCATE_SIZE)
 			txt->buf = buffer_read(txt, size, fd);
 		else
 			txt->buf = buffer_truncated_read(txt, size, fd);
@@ -795,6 +826,84 @@ out:
 		close(fd);
 	text_free(txt);
 	return NULL;
+}
+
+bool text_save(Text *txt, const char *filename) 
+{
+	int fd = -1;
+	if (filename) {
+		if ((fd = open(filename, O_CREAT | O_RDWR | O_TEXT, S_IREAD | S_IWRITE)) == -1) 
+		{
+			perror("open failed.");
+			return false;
+		}
+			
+		if (text_write(txt, fd) == -1)
+		{
+			perror("write failed.");
+			return false;
+		}
+			
+	}
+	if(fd != -1)
+		close(fd);
+	return true;
+}
+
+int text_write(Text *txt, int fd) 
+{
+	Filerange r;
+	r.start = 0;
+	r.end = text_size(txt);
+	return text_write_range(txt, &r, fd);
+}
+
+int text_write_range(Text *txt, Filerange *range, int fd) 
+{
+	size_t size = text_range_size(range), rem = size;
+	Iterator it = iterator_get(txt, range->start);
+	for (; rem > 0 && iterator_valid(&it); iterator_next(&it)) 
+	{
+		size_t prem = it.end - it.text;
+		int written;
+		if (prem > rem)
+			prem = rem;
+		written = write_all(fd, it.text, prem);
+		if (written == -1)
+			return -1;
+		rem -= written;
+		if ((size_t)written != prem)
+			break;
+	}
+	return size - rem;
+}
+
+size_t text_undo(Text *txt) {
+	size_t pos = EPOS;
+	Action *a;
+	/* taking a snapshot makes sure that txt->current_action is reset */
+	text_snapshot(txt);
+	a = txt->history->prev;
+	if (!a)
+		return pos;
+	pos = action_undo(txt, txt->history);
+	txt->history = a;
+	lineno_cache_invalidate(&txt->lines);
+	return pos;
+}
+
+size_t text_redo(Text *txt) {
+	size_t pos = EPOS;
+	Action *a;
+	/* taking a snapshot makes sure that txt->current_action is reset */
+	text_snapshot(txt);
+	a = txt->history->next;
+	if (!a)
+		return pos;
+	pos = action_redo(txt, a);
+	txt->history = a;
+	lineno_cache_invalidate(&txt->lines);
+	return pos;
 }
 
 void text_free(Text *txt) 
@@ -1016,7 +1125,8 @@ bool text_range_valid(const Filerange *r)
 	return r->start != EPOS && r->end != EPOS && r->start <= r->end;
 }
 
-size_t text_range_size(const Filerange *r) {
+size_t text_range_size(const Filerange *r) 
+{
 	return text_range_valid(r) ? r->end - r->start : 0;
 }
 
@@ -1037,6 +1147,10 @@ void text_snapshot(Text *txt)
 	txt->cache = NULL;
 }
 
+size_t text_size(Text *txt)
+{
+	return txt->size;
+}
 
 #ifdef DEBUG
 
@@ -1091,6 +1205,8 @@ void test_print_current_action(Text *txt)
 	fprintf(logfile, "&*********&*********&*******&************************&\n");
 	fprintf(logfile, "|  Type   |   Size  |	 pos  |     Pieces content     |\n");
 	fprintf(logfile, "&*********&*********&*******&************************&\n");
+	if (!txt->current_action)
+		return ;
 	for (c = txt->current_action->change; c; c = c->next)
 	{
 		fprintf(logfile, "|   new   |  %5u  |  %3u  |  ", c->new.len, c->pos);
