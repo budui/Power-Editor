@@ -13,10 +13,6 @@
 #define FUNC_NOT_SET -1 // have not set the func for menu_id node.
 #define MAX_LINE_SIZE 20 
 
-#ifdef DEBUG
-extern FILE *logfile;
-#endif // DEBUG
-
 typedef struct menu
 {
 	char *name; // name of menu.
@@ -100,8 +96,8 @@ static int loadmenu(char *filename, FILE * *menu)
 	if (!(*menu = fopen(filename, "rt")))
 	{
 #ifdef DEBUG
-		fprintf(logfile, "[ERROR] Can not open menu config file. | FILE: %s LINE: %d\n", __FILE__, __LINE__);
-		fprintf(logfile, "          Detail: %s\n", strerror(errno));
+		fprintf(stderr, "[ERROR] Can not open menu config file. | FILE: %s LINE: %d\n", __FILE__, __LINE__);
+		fprintf(stderr, "          Detail: %s\n", strerror(errno));
 #endif // DEBUG
 		return -1;
 	}
@@ -178,7 +174,7 @@ static bool maketree(FILE *config, menu *root, int size, char *buf)
 			if (i == MAX_DEEPTH+1)
 			{
 #ifdef DEBUG
-				fprintf(logfile, "[WARNING] config file incorrect space number. (%s)",buf);
+				fprintf(stderr, "[WARNING] config file incorrect space number. (%s)",buf);
 #endif // DEBUG
 				fclose(config);
 				return false;
@@ -231,6 +227,42 @@ void FreeMenu(menuptr root)
 	free(root->name);
 	free(root);
 	root = NULL;
+}
+
+menuptr GetMenuByNum(menuptr root,int num)
+{
+	menuptr m;
+	int i = 1;
+	if(!root)
+		return NULL;
+	
+	for(m = FirsrChildMenu(root);m;i++)
+	{
+		if(i == num)
+			break;
+		m = NextBroMenu(m);
+	}
+		
+	return m;
+}
+
+int MenuChildCount(menuptr root)
+{
+	menuptr m;
+	int i = 0;
+	if(!root)
+		return -1;
+	
+	for(m = FirsrChildMenu(root);m;i++)
+		m = NextBroMenu(m);
+	return i;
+}
+
+int MenuID(menuptr m)
+{
+	if(!m)
+		return -1;
+	return m->offest;
 }
 
 menuptr NextBroMenu(menuptr m)
@@ -292,14 +324,14 @@ void debug_Draw_menu(menuptr root, int linenum)
 
 	if (!root)
 	{
-		fprintf(logfile, "[WARNING] root is NULL | FILE: %s LINE: %d\n", __FILE__, __LINE__);
+		fprintf(stderr, "[WARNING] root is NULL | FILE: %s LINE: %d\n", __FILE__, __LINE__);
 		return;
 	}
 
 	for (node = *root; i <= linenum; i++)
 	{
 		node = *(root + i);
-		fprintf(logfile, "[NODE]%s func:%d permission:%d, child:%d, bro:%d\n,offest", node.name, \
+		fprintf(stderr, "[NODE]%s func:%d permission:%d, child:%d, bro:%d\n,offest", node.name, \
 			node.func_id, node.permission, node.child_id, node.bro_id,node.offest);
 			
 	}

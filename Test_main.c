@@ -2,11 +2,6 @@
 #include <stdlib.h>
 #include "text.h"
 
-
-#ifdef DEBUG
-FILE *logfile;
-#endif // DEBUG
-
 void showfile(Text *txt);
 void delenter(char * str);
 
@@ -18,6 +13,8 @@ int main(void)
 	int len = 0;
 	size_t pos = 0,i;
 	char str[30] = { 0 };
+	Iterator its = iterator_get(txt, text_size(txt));
+	freopen(".\\editor.log", "w", stderr);
 	
 	showfile(txt);
 	printf("Power-editor cmd version.\n");
@@ -70,11 +67,9 @@ int main(void)
 	}
 	
 #ifdef DEBUG
-	logfile = fopen(".\\editor.log", "w");
 	test_print_buffer(txt);
 	test_print_piece(txt);
 	test_print_current_action(txt);
-	fclose(logfile);
 #endif // DEBUG
 	
 	text_free(txt);

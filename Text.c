@@ -1155,7 +1155,6 @@ size_t text_size(Text *txt)
 #ifdef DEBUG
 
 /* if set debug mode, open log file to recode log. */
-extern FILE * logfile;
 
 static bool test_print_span(Piece *start, Piece *end, size_t lim);
 static bool test_print_span(Piece *start, Piece *end, size_t lim)
@@ -1163,15 +1162,15 @@ static bool test_print_span(Piece *start, Piece *end, size_t lim)
 	Piece *p = start;
 	if (!start || !end)
 	{
-		fprintf(logfile, "**[NULL]**\n");
+		fprintf(stderr, "**[NULL]**\n");
 		return false;
 	}
 	while (p != end->next)
 	{
-		fprintf(logfile, "@ %u %.*s ", p->len, (int)(lim > p->len ? p->len : lim), p->data);
+		fprintf(stderr, "@ %u %.*s ", p->len, (int)(lim > p->len ? p->len : lim), p->data);
 		p = p->next;
 	}
-	fprintf(logfile, "\n");
+	fprintf(stderr, "\n");
 	return true;
 }
 
@@ -1181,40 +1180,40 @@ void test_print_buffer(Text *txt)
 	
 	for (buf = txt->buffers; buf ; buf = buf->next)
 	{
-		fprintf(logfile, "\n***[BUFFER CONTENT]***\n");
-		fprintf(logfile, "%.*s\n", (int)txt->buffers->len, txt->buffers->data);
+		fprintf(stderr, "\n***[BUFFER CONTENT]***\n");
+		fprintf(stderr, "%.*s\n", (int)txt->buffers->len, txt->buffers->data);
 	}
 }
 void test_print_piece(Text *txt)
 {
 	Piece *p;
-	fprintf(logfile, "\n***[PIECE CHAINS]***\n");
-	fprintf(logfile, "+-------+--------+---------------------+\n");
-	fprintf(logfile, "| start | length |       content       |\n");
+	fprintf(stderr, "\n***[PIECE CHAINS]***\n");
+	fprintf(stderr, "+-------+--------+---------------------+\n");
+	fprintf(stderr, "| start | length |       content       |\n");
 	for (p = txt->begin.next; p->next; p = p->next)
 	{
-		fprintf(logfile, "+-------+--------+---------------------+\n");
-		fprintf(logfile, "+   %c   +  %3u   +  %.*s\n", *(p->data), p->len,(int)(p->len), p->data);
+		fprintf(stderr, "+-------+--------+---------------------+\n");
+		fprintf(stderr, "+   %c   +  %3u   +  %.*s\n", *(p->data), p->len,(int)(p->len), p->data);
 	}
-	fprintf(logfile, "+-------+--------+---------------------+\n");
+	fprintf(stderr, "+-------+--------+---------------------+\n");
 }
 void test_print_current_action(Text *txt)
 {
 	Change *c;
-	fprintf(logfile, "\n***[CHANGE CHAINS]***\n");
-	fprintf(logfile, "&*********&*********&*******&************************&\n");
-	fprintf(logfile, "|  Type   |   Size  |	 pos  |     Pieces content     |\n");
-	fprintf(logfile, "&*********&*********&*******&************************&\n");
+	fprintf(stderr, "\n***[CHANGE CHAINS]***\n");
+	fprintf(stderr, "&*********&*********&*******&************************&\n");
+	fprintf(stderr, "|  Type   |   Size  |	 pos  |     Pieces content     |\n");
+	fprintf(stderr, "&*********&*********&*******&************************&\n");
 	if (!txt->current_action)
 		return ;
 	for (c = txt->current_action->change; c; c = c->next)
 	{
-		fprintf(logfile, "|   new   |  %5u  |  %3u  |  ", c->new.len, c->pos);
+		fprintf(stderr, "|   new   |  %5u  |  %3u  |  ", c->new.len, c->pos);
 		test_print_span(c->new.start, c->new.end, 10);
-		fprintf(logfile, "+---------+---------+-------+------------------------+\n");
-		fprintf(logfile, "|   old   |  %5u  |  %3u  |  ", c->old.len, c->pos);
+		fprintf(stderr, "+---------+---------+-------+------------------------+\n");
+		fprintf(stderr, "|   old   |  %5u  |  %3u  |  ", c->old.len, c->pos);
 		test_print_span(c->old.start, c->old.end, 10);
-		fprintf(logfile, "&*********&*********&*******&************************&\n");
+		fprintf(stderr, "&*********&*********&*******&************************&\n");
 	}
 }
 

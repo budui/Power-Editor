@@ -67,7 +67,7 @@ static bool char2mat(int handle, const char *ch, char *mat)
 static void showchinese(int x, int y, unsigned char *mat, colors color,colors bkcolor)
 {
     // calculate the address of the pic of the Chinese.
-    char far *p = (char far *)(0xa0000000 + 80*y + x / 8); 
+    char far *p = (char far *)(0xa0000000 + 80*y + x / 8);
     register int i,j,k;
     for(i = 0; i < 16; ++i)
     {
@@ -133,7 +133,7 @@ int print_str_xy(const char *s, int x,int y)
             s += 2;
             i++;
         }
-        x = 24; 
+        x += 24; 
         y += 20;
     }
     return i;

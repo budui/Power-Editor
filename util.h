@@ -27,7 +27,7 @@ typedef enum { ENGLISH, CHINESE } LANGUAGE;
 /* set debug mode 
 * open editor.log to write log file.
 */
-#define DEBUG
+#define DEBUG 1
 
 
 #endif
