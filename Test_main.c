@@ -7,7 +7,7 @@ void delenter(char * str);
 
 int main(void)
 {
-	Text *txt = text_load("E:\\tools\\BC\\DISK_C\\learnc\\test_hz.txt");
+	Text *txt = text_load(".\\thefile.txt");
 	Iterator it;
 	char c;
 	int len = 0;
@@ -50,6 +50,7 @@ int main(void)
 			scanf("%d %d", &pos, &len);
 			while(getchar() != '\n');
 			text_delete(txt, pos, len);
+			test_print_piece(txt);
 			break;
 		case 'a':
 			pos = text_size(txt);

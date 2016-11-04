@@ -1096,6 +1096,7 @@ bool text_delete(Text *txt, size_t pos, size_t len)
 		if (!new_end)
 			return false;
 		piece_init(new_end, old_start->prev, old_end->next, old_end->data + end_loc.off, old_end->len - end_loc.off);
+		new_start = new_end;
 	}
 	else 
 	{

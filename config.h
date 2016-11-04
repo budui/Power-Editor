@@ -1,6 +1,8 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
+#define CONFIG_FILE_TRUNCATE_SIZE 1<<16
+
 /* file loaction. */
 #define CONFIG_MENU_CN ".\\config\\menu_cn"
 #define CONFIG_MENU_EN ".\\config\\menu_en"
