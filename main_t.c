@@ -13,15 +13,14 @@
 int main()
 {
     const menuptr root =  GetMenu(CHINESE);
-	int x,y,button;
+    int x,y,button;
     char far *buf;
     freopen(".\\view.log","w",stderr);
 
-    VGA_INIT();
+    vga_init();
     print_init();
     view_main_window("Power-editor",BLUE);
     view_main_menu(root);
-	print_str_xy("你好，我好，大家好。",100,100);
     if(initmouse()==0)
     {
         printf("\n Unable to initialise Mouse");  exit(0);
@@ -32,11 +31,11 @@ int main()
     while(1)
     {
         get_main_menu_choice(root);
+        menu_key_manager(root);
     }
 
-	getch();
+    getch();
     print_close();
     FreeMenu(root);
     return 0;
 }
-

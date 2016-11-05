@@ -4,8 +4,23 @@
 #include "util.h"
 #include "menu.h"
 
+
+#define EDITOR_NAME "Power-editor"
+
+#define WINDOW_MAXX 638
+#define WINDOW_MAXY 478
+#define WINDOW_MINX 1
+#define WINDOW_MINY 1
+
+#define EDIT_WINDOW_MAXX 631
+#define EDIT_WINDOW_MAXY 456
+#define EDIT_WINDOW_MINX 5
+#define EDIT_WINDOW_MINY 40
+
+
 /* open VGA mode and set back color is BLACK. */
-bool VGA_INIT(void);
+bool vga_init(void);
+void vga_close(void);
 /* draw the main window of the GUI. */
 void view_main_window(const char *name, colors barcolor);
 /* draw the main menu of the GUI. */
@@ -15,9 +30,7 @@ int view_main_menu(const menuptr root);
 */
 bool clickclosebutton(int x,int y,int button);
 void get_main_menu_choice(menuptr root);
-void get_sub_menu_choice(menuptr m);
 
-bool sub_menu_hidden(char far *buf,int x,int y);
- char far *sub_menu_show(menuptr m);
+void menu_key_manager(menuptr root);
 
 #endif

@@ -14,5 +14,13 @@ bool initmouse(void);
 int showmouseptr(void);
 //隐藏鼠标
 int hidemouseptr(void);
-//得到鼠标位置和按键状态（取值为上面3个宏）
+
+/* get mouse's state.
+* return true when keyboard is hit or button is click.
+* (getmousepos(&button,&x,&y) && !button): keyboard is hit.
+* (getmousepos(&button,&x,&y) && button): mouse is clicked.
+* (!getmousepos): mouse jusr move.
+*/
 bool getmousepos(int *button,int *x,int *y);
+
+void draw_cursor(int x,int y);

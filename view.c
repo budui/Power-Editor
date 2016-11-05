@@ -3,14 +3,16 @@
 #include <stdlib.h>
 #include <alloc.h>
 #include <errno.h>
-
+#include <bios.h>
+#include <conio.h>
 #include "view.h"
 #include "print.h"
 #include "mouse.h"
 #include "config.h"
+#include "key.h"
 
-#define SHADOW_LIGHT 1
-#define SHADOW_HARD 2
+#define SUBMENU 1
+#define MAINMENU 2
 
 /* flag for func main_menu_change */
 #define MAIN_BORDER_IN 1
@@ -21,26 +23,52 @@
 #define SUB_HIGHLIGHT 1
 
 #define MAIN_MENU_WIDTH 48
+#define SUB_MENU_Y 41
+#define MAIN_MENU_X 10
+#define MAIN_MENU_Y 23
 
-typedef struct{
-    int x;
-    int y;
-} point;
-
-static void sub_menu_change(int x1,int y1,int flag);
-static void main_menu_change(int x1, int flag);
-//void get_sub_menu_choice(menuptr m);
-static void closebutton(int x1,int y1);
-static void showicon(int x1,int y1);
-static void shadow_inner(point left,point right,colors inner,int flag);
-
-static bool point_init(point *p, int x, int y);
-static bool point2int(point p,int *x,int *y);
-
-
+#define SHADOW_IN 1
+#define SHADOW_OUT 2
+static int is_arrow_key_hit(int flag);
+static void sub_menu_change(int x1,int choice,int flag);
+static void main_menu_change(int choice, int flag);
+static void draw_closebutt(int x1,int y1);
+static void draw_icon(int x1,int y1);
+static void draw_shadow(int x1,int y1,int x2,int y2, int flag,int inner);
+static void get_sub_menu_choice(menuptr m);
+static bool sub_menu_hidden(char far *buf,int x,int y);
+static char far *sub_menu_show(menuptr m);
 
 
-static void closebutton(int x,int y)
+static void draw_shadow(int x1,int y1,int x2,int y2, int flag,int inner)
+{
+    switch(flag)
+    {
+    case SHADOW_IN:
+        setfillstyle(SOLID_FILL,inner);
+        bar(x1+1,y1+1,x2,y2);
+        setcolor(DARKGRAY);
+        line(x1,y1,x2+2,y1);
+        line(x1,y1,x1,y2+2);
+        setcolor(BLACK);
+        line(x1+1,y1+1,x2+1,y1+1);
+        line(x1+1,y1+1,x1+1,y2+1);
+        setcolor(WHITE);
+        line(x1,y2+3,x2+2,y2+3);
+        line(x2+3,y1,x2+3,y2+3);
+        break;
+    case SHADOW_OUT:
+        setfillstyle(SOLID_FILL,inner);
+        setcolor(WHITE);
+        rectangle(x1-1, y1-1, x2, y2);
+        setcolor(DARKGRAY);
+        rectangle(x1, y1, x2+1, y2+1);
+        bar(x1, y1, x2, y2);
+        break;
+    }
+}
+
+static void draw_closebutt(int x,int y)
 {
     //shadow.
     setcolor(WHITE);
@@ -56,7 +84,7 @@ static void closebutton(int x,int y)
     outtextxy(x-2,y-9,"x");
 }
 
-static void showicon(int x1,int y1)
+static void draw_icon(int x1,int y1)
 {
     setcolor(YELLOW);
     outtextxy(x1,y1,"/");
@@ -67,87 +95,12 @@ static void showicon(int x1,int y1)
     outtextxy(x1+5,y1+4,"/");
 }
 
-static void shadow_outter(point left,point right,colors inner,int flag)
+static void main_menu_change(int choice, int flag)
 {
-    int x1,x2,y1,y2;
-    point2int(left,&x1,&y1);
-    point2int(right,&x2,&y2);
-    switch(flag)
-    {
-    case SHADOW_HARD:
-        setfillstyle(SOLID_FILL,inner);
-        bar(x1+1,y1+1,x2,y2);
-        setcolor(DARKGRAY);
-        line(x1,y1,x2+2,y1);
-        line(x1,y1,x1,y2+2);
-        setcolor(BLACK);
-        line(x1+1,y1+1,x2+1,y1+1);
-        line(x1+1,y1+1,x1+1,y2+1);
-        setcolor(WHITE);
-        line(x1,y2+3,x2+2,y2+3);
-        line(x2+3,y1,x2+3,y2+3);
-        break;
-    case SHADOW_LIGHT:
-        setfillstyle(SOLID_FILL,inner);
-        setcolor(WHITE);
-        rectangle(x1-1, y1-1, x2, y2);
-        setcolor(DARKGRAY);
-        rectangle(x1, y1, x2+1, y2+1);
-        bar(x1, y1, x2, y2);
-        break;
-    }
-
-}
-
-static void shadow_inner(point left,point right,colors inner,int flag)
-{
-    int x1,x2,y1,y2;
-    point2int(left,&x1,&y1);
-    point2int(right,&x2,&y2);
-    switch(flag)
-    {
-    case SHADOW_HARD:
-        setfillstyle(SOLID_FILL,inner);
-        bar(x1+1,y1+1,x2,y2);
-        setcolor(DARKGRAY);
-        line(x1,y1,x2+2,y1);
-        line(x1,y1,x1,y2+2);
-        setcolor(BLACK);
-        line(x1+1,y1+1,x2+1,y1+1);
-        line(x1+1,y1+1,x1+1,y2+1);
-        setcolor(WHITE);
-        line(x1,y2+3,x2+2,y2+3);
-        line(x2+3,y1,x2+3,y2+3);
-        break;
-    case SHADOW_LIGHT:
-        break;
-    }
-
-}
-
-static bool point_init(point *p, int x, int y)
-{
-    if(!p)
-        return false;
-    p->x = x;
-    p->y = y;
-    return true;
-}
-
-static bool point2int(point p,int *x,int *y)
-{
-    if(!x || !y)
-        return false;
-    *x = p.x;
-    *y = p.y;
-    return true;
-}
-
-static void main_menu_change(int x1, int flag)
-{
-    int y1 = CONFIG_MAIN_MENU_Y-2;
+    int x1 = MAIN_MENU_X + (choice-1)*MAIN_MENU_WIDTH;
+    int y1 = MAIN_MENU_Y-2;
     int x2 = x1 + MAIN_MENU_WIDTH-7;
-    int y2 = CONFIG_MAIN_MENU_Y + CONFIG_CN_SIZE+1;
+    int y2 = MAIN_MENU_Y + CONFIG_CN_SIZE+1;
     x1 = x1 - 5;
     switch(flag)
     {
@@ -178,8 +131,9 @@ static void main_menu_change(int x1, int flag)
     }
 }
 
-static void sub_menu_change(int x1,int y1,int flag)
+static void sub_menu_change(int x1,int choice,int flag)
 {
+    int y1 = SUB_MENU_Y + (16+5)*(choice-1);
     int x2,y2;
     x1 = x1 + 3;
     y1 = y1 + 3;
@@ -207,7 +161,8 @@ static void sub_menu_change(int x1,int y1,int flag)
         return;
     }
 }
-bool VGA_INIT(void)
+
+bool vga_init(void)
 {
     int gd=VGA,gm=VGAHI;
     initgraph(&gd,&gm,"c:\\BORLANDC\\bgi");
@@ -219,51 +174,49 @@ bool VGA_INIT(void)
     return true;
 }
 
+void vga_close(void)
+{
+    cleardevice();
+    closegraph();
+}
 
 bool clickclosebutton(int x,int y,int button)
 {
-    int x1 = CONFIG_WINDOW_MAXX - 15 - 5;
+    int x1 = WINDOW_MAXX - 15 - 5;
     int y1 = 0;
-    int x2 = CONFIG_WINDOW_MAXX - 15 + 9;
+    int x2 = WINDOW_MAXX - 15 + 9;
     int y2 = 18;
     if(button != MOUSE_LEFTPRESS)
         return false;
     return (x >= x1 && x <= x2 && y >= y1 && y <= y2);
 }
 
-void view_main_window(const char *name, colors barcolor)
+void view_main_window()
 {
-    point tpl,tpr; //temp point left and temp point right.
-    int x1 = 1,y1 = 1, x2 = CONFIG_WINDOW_MAXX, y2 = CONFIG_WINDOW_MAXY;
-
     //biggest window.
-    point_init(&tpr,x2,y2);
-    point_init(&tpl,x1 + 1,x1 + 1);
-    shadow_outter(tpl,tpr,LIGHTGRAY,SHADOW_LIGHT);
+    draw_shadow(WINDOW_MINX,WINDOW_MINY,WINDOW_MAXX,WINDOW_MAXY,SHADOW_OUT,LIGHTGRAY);
     //name bar.
-    setfillstyle(SOLID_FILL,barcolor);
-    bar(x1+3,y1+3,x2-3,y1+19);
+    setfillstyle(SOLID_FILL,BLUE);
+    bar(WINDOW_MINX+3,WINDOW_MINY+3,WINDOW_MAXX-3,WINDOW_MINY+19);
     //editor name.
     settextstyle(SMALL_FONT,0,5);
     setcolor(WHITE);
-    outtextxy(x1+25,y1+2,name);
+    outtextxy(WINDOW_MINX+25,WINDOW_MINX+2,EDITOR_NAME);
     //edit window
-    point_init(&tpr,x2 - 7,y2 - 22);
-    point_init(&tpl,x1 + 4,y1 + 39);
-    shadow_outter(tpl,tpr,WHITE,SHADOW_HARD);
+    draw_shadow(EDIT_WINDOW_MINX,EDIT_WINDOW_MINY,EDIT_WINDOW_MAXX,EDIT_WINDOW_MAXY,SHADOW_IN,WHITE);
     //button
-    closebutton(x2-15,y1+8);
+    draw_closebutt(WINDOW_MAXX-15,WINDOW_MINY+8);
     //icon
-    showicon(x1+7,y1);
+    draw_icon(WINDOW_MINX+7,WINDOW_MINY-1);
 }
 
 int view_main_menu(const menuptr root)
 {
     menuptr m = FirsrChildMenu(root);
-    int x = CONFIG_MAIN_MENU_X,y = CONFIG_MAIN_MENU_Y;
+    int x = MAIN_MENU_X,y = MAIN_MENU_Y;
     do
-	{
-		print_str_xy(MenuName(m),x,y);
+    {
+        print_str_xy(MenuName(m),x,y);
             x += MAIN_MENU_WIDTH;
     } while((m = NextBroMenu(m)) != NULL);
     return x;
@@ -281,7 +234,7 @@ bool view_run_func(menuptr m)
         get_sub_menu_choice(m);
         break;
     case MENU_SUB_NEWFILE:
-		outtextxy(100,100,"aaaa");
+        outtextxy(100,100,"aaaa");
         break;
     case MENU_SUB_OPENFILE:
         break;
@@ -325,196 +278,27 @@ bool view_run_func(menuptr m)
 #endif
         return false;
     }
-	return true;
+    return true;
 }
 
-void get_main_menu_choice(menuptr root)
-{
-    int prevchoice = 0, choice = 1;
-    int nSubMenu = MenuChildCount(root);
-    int x1 = CONFIG_MAIN_MENU_X;
-    int y1 = CONFIG_MAIN_MENU_Y;
-    int y2 = CONFIG_MAIN_MENU_Y + CONFIG_CN_SIZE;
-    int x2 = x1 + nSubMenu*MAIN_MENU_WIDTH;
-    int x,y,button,i;
-    bool in = false; // if mouse is above main menu area.
-
-    while(1)
-    {
-        getmousepos(&button,&x,&y);getmousepos(&button,&x,&y);
-        if(clickclosebutton(x,y,button))
-        {
-            cleardevice();
-            closegraph();
-            exit(1);
-        }
-        if(x>=x1 && x<=x2 && y>=y1 && y<=y2)
-        {
-            in = true;
-            //calculte the no. of the main menu where mouse above.
-            for(i = 1;i<=nSubMenu;i++)
-            {
-                if(x <= CONFIG_MAIN_MENU_X + MAIN_MENU_WIDTH*i)
-                {
-                    choice = i;
-                    break;
-                }
-            }
-            if(prevchoice!=choice)
-            {
-                hidemouseptr();
-                if(prevchoice)
-                    main_menu_change(CONFIG_MAIN_MENU_X + (prevchoice-1)*MAIN_MENU_WIDTH,MAIN_BORDER_QUIT);
-                main_menu_change(CONFIG_MAIN_MENU_X + (choice-1)*MAIN_MENU_WIDTH,MAIN_BORDER_OUT);
-                prevchoice=choice;
-                showmouseptr();
-            }
-            if(button == MOUSE_LEFTPRESS)
-            {
-                while(button == MOUSE_LEFTPRESS)
-                    /* if keep click main menu for a while.
-                     do not show sub menu right now.*/
-                    getmousepos(&button,&x,&y);
-                if(x>=x1 && x<=x2 && y>=y1 && y<=y2)
-                {
-                    /* main menu is clicked. */
-                    main_menu_change(CONFIG_MAIN_MENU_X + (choice-1)*MAIN_MENU_WIDTH,MAIN_BORDER_IN);
-                    if(!view_run_func(GetMenuByNum(root,choice)))
-                    {
-#ifdef DEBUG
-                        outtext("run func failed.");
-#endif
-                    }
-                    main_menu_change(CONFIG_MAIN_MENU_X + (choice-1)*MAIN_MENU_WIDTH,MAIN_BORDER_QUIT);
-                    showmouseptr();
-                    return;
-                }
-            }
-        }
-        else
-        {
-            if(in)
-            {
-                in=false;
-                prevchoice=0;
-                hidemouseptr();
-                main_menu_change(CONFIG_MAIN_MENU_X + (choice-1)*MAIN_MENU_WIDTH,MAIN_BORDER_QUIT);
-                showmouseptr();
-            }
-        }
-    }
-}
-
-void get_sub_menu_choice(menuptr m)
+static char far *sub_menu_show(menuptr m)
 {
     menuptr root =  GetRootMenu(m);
     int n = MenuChildNum(root,m);
-    int prevchoice = 0, choice = 1;
-    int nSubMenu = MenuChildCount(m);
-    int x1 = CONFIG_MAIN_MENU_X+(n-1)*MAIN_MENU_WIDTH;
-    int y1 = CONFIG_SUB_MENU_Y;
-    int x2 = x1 + 5*CONFIG_CN_SIZE + 3;
-    int y2 = y1 + nSubMenu*(16+5)+3;
-    int x,y,button;
-    bool in; // if mouse is above main menu area.
-    char far *buf;
-
-    hidemouseptr();
-    buf = sub_menu_show(m);
-    showmouseptr();
-    if(!buf)
-    {
-#ifdef DEBUG
-        fprintf(stderr,"Show sub menu may be failed.");
-#endif
-        return;
-    }
-
-    while(1)
-    {
-        getmousepos(&button,&x,&y);
-        if(x<x1 || x>x2 || y<y1 || y>y2)
-        {
-            if(button == MOUSE_LEFTPRESS)
-            {
-                hidemouseptr();
-                sub_menu_hidden(buf,x1,y1);
-				return;
-			}
-		}
-		if(x>=x1 && x<=x2 && y>=y1 && y<=y2)
-		{
-			int i;
-			in = true;
-			//calculte the no. of the main menu where mouse above.
-			for(i = 1;i<=nSubMenu;i++)
-			{
-				if(y < y1 + (16+5)*i)
-				{
-					choice = i;
-					break;
-				}
-			}
-			if(prevchoice!=choice)
-			{
-				hidemouseptr();
-				if(prevchoice)
-					sub_menu_change(x1,y1 + (16+5)*(prevchoice-1),SUB_DEHIGHLIGHT);
-				sub_menu_change(x1,y1 + (16+5)*(choice-1),SUB_HIGHLIGHT);
-				prevchoice=choice;
-				showmouseptr();
-			}
-			if(button == MOUSE_LEFTPRESS)
-			{
-				while(button == MOUSE_LEFTPRESS)
-					/* if keep click main menu for a while.
-					 do not show sub menu right now.*/
-					getmousepos(&button,&x,&y);
-				if(x>=x1 && x<=x2 && y>=y1 && y<=y2)
-				{
-					sub_menu_hidden(buf,x1,y1);
-					if(!view_run_func(GetMenuByNum(m,choice)))
-					{
-#ifdef DEBUG
-						outtext("run func failed.");
-#endif
-					}
-					return;
-				}
-			}
-		}
-		else
-		{
-			if(in)
-            {
-                in=false;
-                prevchoice=0;
-                hidemouseptr();
-                sub_menu_change(x1,y1 + (16+5)*(choice-1),SUB_DEHIGHLIGHT);
-                showmouseptr();
-            }
-        }
-    }
-}
-
-char far *sub_menu_show(menuptr m)
-{
-    menuptr root =  GetRootMenu(m);
-    int n = MenuChildNum(root,m);
-    int x1 = CONFIG_MAIN_MENU_X+(n-1)*MAIN_MENU_WIDTH;
-    int y1 = CONFIG_SUB_MENU_Y;
+    int x1 = MAIN_MENU_X+(n-1)*MAIN_MENU_WIDTH;
+    int y1 = SUB_MENU_Y;
     int x2 = x1 + 5*CONFIG_CN_SIZE + 3;
     int y2 = y1 + MenuChildCount(m)*(16+5)+3;
     int y = y1;
     char far *buf;
     hidemouseptr();
-	buf = (char far *)farmalloc(imagesize(x1,y1,x2,y2));
+    buf = (char far *)farmalloc(imagesize(x1,y1,x2,y2));
     if(!buf)
     {
         perror("sub menu buffer farmalloc failed!");
         return NULL;
     }
-	getimage(x1,y1,x2,y2,buf);
+    getimage(x1,y1,x2,y2,buf);
 
     m = FirsrChildMenu(m);
     setfillstyle(SOLID_FILL,LIGHTGRAY);
@@ -535,13 +319,283 @@ char far *sub_menu_show(menuptr m)
     return buf;
 }
 
-bool sub_menu_hidden(char far *buf,int x,int y)
+static bool sub_menu_hidden(char far *buf,int x,int y)
 {
     if(!buf)
         return false;
     hidemouseptr();
-	putimage(x,y,buf,COPY_PUT);
+    putimage(x,y,buf,COPY_PUT);
     farfree(buf);
     showmouseptr();
     return true;
 }
+
+void get_main_menu_choice(menuptr root)
+{
+    int prevchoice = 0, choice = 1;
+    int nSubMenu = MenuChildCount(root);
+    int x1 = MAIN_MENU_X;
+    int y1 = MAIN_MENU_Y;
+    int y2 = MAIN_MENU_Y + CONFIG_CN_SIZE;
+    int x2 = x1 + nSubMenu*MAIN_MENU_WIDTH;
+    int x,y,button,i,key;
+    bool in = false; // if mouse is above main menu area.
+
+    while(!kbhit())
+    {
+        getmousepos(&button,&x,&y);
+        if(clickclosebutton(x,y,button))
+        {
+            cleardevice();
+            closegraph();
+            exit(1);
+        }
+        if(x>=x1 && x<=x2 && y>=y1 && y<=y2)
+        {
+            in = true;
+            //calculte the no. of the main menu where mouse above.
+            for(i = 1;i<=nSubMenu;i++)
+            {
+                if(x <= MAIN_MENU_X + MAIN_MENU_WIDTH*i)
+                {
+                    choice = i;
+                    break;
+                }
+            }
+            if(prevchoice!=choice)
+            {
+                hidemouseptr();
+                if(prevchoice)
+                    main_menu_change(prevchoice,MAIN_BORDER_QUIT);
+                main_menu_change(choice,MAIN_BORDER_OUT);
+                prevchoice=choice;
+                showmouseptr();
+            }
+            if(button == MOUSE_LEFTPRESS)
+            {
+                while(button == MOUSE_LEFTPRESS)
+                    /* if keep click main menu for a while.
+                     do not show sub menu right now.*/
+                    getmousepos(&button,&x,&y);
+                if(x>=x1 && x<=x2 && y>=y1 && y<=y2)
+                {
+
+                    /* main menu is clicked. */
+                    main_menu_change(choice,MAIN_BORDER_IN);
+                    //hidemouseptr();
+                    if(!view_run_func(GetMenuByNum(root,choice)))
+                    {
+                        outtext("run func failed.");
+                    }
+                    main_menu_change(choice,MAIN_BORDER_QUIT);
+                    //showmouseptr();
+                    return;
+                }
+            }
+        }
+        else
+        {
+            if(in)
+            {
+                in=false;
+                prevchoice=0;
+                hidemouseptr();
+                main_menu_change(choice,MAIN_BORDER_QUIT);
+                showmouseptr();
+            }
+        }
+    }
+    main_menu_change(choice,MAIN_BORDER_QUIT);
+}
+
+static void get_sub_menu_choice(menuptr m)
+{
+    menuptr root =  GetRootMenu(m);
+    int n = MenuChildNum(root,m);
+    int prevchoice = 0, choice = 1;
+    int nSubMenu = MenuChildCount(m);
+    int x1 = MAIN_MENU_X+(n-1)*MAIN_MENU_WIDTH;
+    int y1 = SUB_MENU_Y;
+    int x2 = x1 + 5*CONFIG_CN_SIZE + 3;
+    int y2 = y1 + nSubMenu*(16+5)+3;
+    int x,y,button,key;
+    bool in; // if mouse is above main menu area.
+    char far *buf;
+
+    hidemouseptr();
+    buf = sub_menu_show(m);
+    showmouseptr();
+    if(!buf)
+    {
+        fprintf(stderr,"Show sub menu may be failed.");
+        return;
+    }
+
+    while(!kbhit())
+    {
+        getmousepos(&button,&x,&y);
+        if(x<x1 || x>x2 || y<y1 || y>y2)
+        {
+            if(button == MOUSE_LEFTPRESS)
+            {
+                sub_menu_hidden(buf,x1,y1);
+                return;
+            }
+        }
+        if(x>=x1 && x<=x2 && y>=y1 && y<=y2)
+        {
+            int i;
+            in = true;
+            //calculte the no. of the main menu where mouse above.
+            for(i = 1;i<=nSubMenu;i++)
+            {
+                if(y < y1 + (16+5)*i)
+                {
+                    choice = i;
+                    break;
+                }
+            }
+            if(prevchoice!=choice)
+            {
+                hidemouseptr();
+                if(prevchoice)
+                    sub_menu_change(x1,prevchoice,SUB_DEHIGHLIGHT);
+                sub_menu_change(x1,choice,SUB_HIGHLIGHT);
+                prevchoice=choice;
+                showmouseptr();
+            }
+            if(button == MOUSE_LEFTPRESS)
+            {
+                while(button == MOUSE_LEFTPRESS)
+                    /* if keep click main menu for a while.
+                     do not show sub menu right now.*/
+                    getmousepos(&button,&x,&y);
+                if(x>=x1 && x<=x2 && y>=y1 && y<=y2)
+                {
+                    sub_menu_hidden(buf,x1,y1);
+                    if(!view_run_func(GetMenuByNum(m,choice)))
+                    {
+                        outtext("run func failed.");
+                    }
+                    return;
+                }
+            }
+        }
+        else
+        {
+            if(in)
+            {
+                in=false;
+                prevchoice=0;
+                hidemouseptr();
+                sub_menu_change(x1,choice,SUB_DEHIGHLIGHT);
+                showmouseptr();
+            }
+        }
+    }
+    sub_menu_change(x1,choice,SUB_DEHIGHLIGHT);
+}
+void menu_key_manager(menuptr root)
+{
+    menuptr m;
+    int mousex,mousey,button;
+    int meuntype = MAINMENU;
+    int choice = 1;
+    int x1;
+    int nSubMenu;
+    char far *buf;
+    while(getmousepos(&button,&mousex,&mousey) && !button)
+    {
+        if (bioskey(1))
+        {
+            int key = bioskey(0);
+            if(meuntype == MAINMENU)
+            {
+                switch(key)
+                {
+                case LEFT:
+                    main_menu_change(choice,MAIN_BORDER_QUIT);
+                    if(choice)
+                    {
+                        if(choice != 1)
+                            choice--;
+                        main_menu_change(choice,MAIN_BORDER_OUT);
+                    }
+                    break;
+                case RIGHT:
+                    main_menu_change(choice,MAIN_BORDER_QUIT);
+                    if (choice < CONFIG_MAIN_MEMU_NUM)
+                    {
+                        choice++;
+                    }
+                    main_menu_change(choice,MAIN_BORDER_OUT);
+                    break;
+                case ENTER:
+                    main_menu_change(choice,MAIN_BORDER_IN);
+                    meuntype = SUBMENU;
+                    x1 = MAIN_MENU_X+(choice-1)*MAIN_MENU_WIDTH;
+                    m = GetMenuByNum(root,choice);
+                    buf = sub_menu_show(m);
+                    nSubMenu = MenuChildCount(m);
+                    choice = 0;
+                    break;
+                case ESC:
+                    exit(1);
+                }
+            }
+            if(meuntype == SUBMENU)
+            {
+                switch(key)
+                {
+                case UP:
+                    if(choice){
+                        sub_menu_change(x1,choice,SUB_DEHIGHLIGHT);
+                        choice--;
+                        if(!choice)
+                        {
+                            sub_menu_hidden(buf,x1,SUB_MENU_Y);
+                            meuntype = MAINMENU;
+                            choice = MenuChildNum(root,m);
+                            main_menu_change(choice,MAIN_BORDER_OUT);
+                        }
+                        else
+                            sub_menu_change(x1,choice,SUB_HIGHLIGHT);
+                    }
+                    break;
+                case DOWN:
+                    if(choice)
+                        sub_menu_change(x1,choice,SUB_DEHIGHLIGHT);
+                    if (choice < nSubMenu)
+                    {
+                        choice++;
+                    }
+                    sub_menu_change(x1,choice,SUB_HIGHLIGHT);
+                    break;
+                case ENTER:
+                    if(choice){
+                        view_run_func(GetMenuByNum(m,choice));
+                        sub_menu_hidden(buf,x1,SUB_MENU_Y);
+                        choice = MenuChildNum(root,m);
+                        main_menu_change(choice,MAIN_BORDER_QUIT);
+                        return;
+                    }
+                    break;
+                case ESC:
+                    exit(1);
+                }
+            }
+
+        }
+    }
+    if (meuntype == MAINMENU)
+    {
+        main_menu_change(choice,MAIN_BORDER_QUIT);
+    }
+    if (meuntype == SUBMENU)
+    {
+        sub_menu_hidden(buf,x1,SUB_MENU_Y);
+        choice = MenuChildNum(root,m);
+        main_menu_change(choice,MAIN_BORDER_QUIT);
+    }
+}
+
