@@ -13,7 +13,7 @@
 /* buffer size for reading file content into memory in function buffer_read. */
 #define READ_BUFF_SIZE ((size_t) 1 << 8)
 
-struct Piece 
+struct Piece
 {
 	Text *text;             /* text to which this piece belongs */
 	Piece *prev, *next;     /* pointers to the logical predecessor/successor */
@@ -37,20 +37,20 @@ typedef struct {
 	size_t len;             /* the sum of this span */
 } Span;
 
-/* A Change keeps all needed information to redo/undo an insertion/deletion. 
+/* A Change keeps all needed information to redo/undo an insertion/deletion.
 * Changes make up A Change list which is alaways related to the same Action.
 */
 typedef struct Change Change;
-struct Change 
+struct Change
 {
 	Span old;               /* all pieces which are being modified/swapped */
 	Span new;               /* all pieces which are introduced/swapped */
 	size_t pos;             /* absolute position at which the change occured */
-	Change *next;          
-	Change *prev;           
+	Change *next;
+	Change *prev;
 };
 
-/* An Action is a list of Changes which are used to undo/redo 
+/* An Action is a list of Changes which are used to undo/redo
 * all modifications since the last snapshot operation.
 * Actions are stored in a directed graph structure.
 */
@@ -65,7 +65,7 @@ struct Action {
 	size_t seq;             /* a unique, strictly increasing identifier */
 };
 
-/* buffer has three types. FILESWP for very large file. 
+/* buffer has three types. FILESWP for very large file.
 * FARMEM for large file. HEAP for current part of file.
 * Make sure being edited buffer' type is HEAP.
 */
@@ -74,30 +74,30 @@ struct Buffer {
 	size_t size;               /* maximal capacity */
 	size_t len;                /* current used length / insertion position */
 	char *data;                /* actual data */
-	union 
+	union
 	{
 		char fileswp; /* keep swap file seq.*/
 #ifdef __BORLANDC__
 		char far *farmem; /* keep address where data moved to. */
 #endif
 	} bak;
-	enum 
-	{                     
+	enum
+	{
 		FILESWP,   /* Buf after writing data to file. */
 		FARMEM,    /* Buf after moving data to far memery. */
-		HEAP,      /* Buf in heap use near pointer. */         
+		HEAP,      /* Buf in heap use near pointer. */
 	} type;
 	Buffer *next;  /* next junk */
 };
 
 typedef struct {
-	size_t pos;             
+	size_t pos;
 	size_t lineno;  /* line number in file i.e. number of '\n' in [0, pos) */
 } LineCache;
 
 
 /* The main struct holding all information of a given file */
-struct Text 
+struct Text
 {
 	Buffer *buf;            /* Contains original file content */
 	Buffer *buffers;        /* buffers allocated to hold insertion data */
@@ -119,7 +119,6 @@ struct TextSave {                  /* used to hold context between text_save_{be
 	char *tmpname;             /* temporary name */
 	int fd;                    /* file descriptor to write data to using text_save_write */
 };
-
 
 static int write_all(int fd, const char *buf, size_t count);
 /* buffer layer */
@@ -154,14 +153,78 @@ static bool iterator_init(Iterator *it, size_t pos, Piece *p, size_t off);
 static void span_swap(Text *txt, Span *old_span, Span *new_span);
 
 
+struct ClipBorad {
+	size_t len;
+	char *buf;
+};
+
+
+ClipBorad *clipborad_init(void)
+{
+	ClipBorad *cli = (ClipBorad *)malloc(sizeof(ClipBorad));
+	if (!cli)
+		return NULL;
+	cli->buf = (char *)malloc(CONFIG_CLIPBORAD_SIZE);
+	if (!cli->buf) {
+		free(cli);
+		return NULL;
+	}
+	cli->len = 0;
+	return cli;
+}
+
+void clipborad_close(ClipBorad *cli)
+{
+	if (!cli)
+		return;
+	free(cli->buf);
+	free(cli);
+}
+bool text_copy(ClipBorad *cli, Text *txt, Filerange *r)
+{
+	size_t size = text_range_size(r), rem = size;
+	Iterator it = iterator_get(txt, r->start);
+	if (size > CONFIG_CLIPBORAD_SIZE)
+		return false;
+	for (; rem > 0 && iterator_valid(&it); iterator_next(&it))
+	{
+		size_t prem = it.end - it.text;
+		if (prem > rem)
+			prem = rem;
+		memcpy(cli->buf + size - rem, it.text, prem);
+		rem -= prem;
+	}
+	cli->len = size;
+	return true;
+}
+
+bool text_paste(ClipBorad *cli, Text *txt, size_t pos)
+{
+	if (!cli->len)
+		return false;
+	if (!text_insert(txt, pos, cli->buf, cli->len))
+		return false;
+	cli->len = 0;
+	return true;
+}
+
+bool text_cut(ClipBorad *cli, Text *txt, Filerange *r)
+{
+	if (!text_copy(cli, txt, r))
+		return false;
+	if (!text_delete_range(txt, r))
+		return false;
+	return true;
+}
+
 /* write len chars from buf into fd file. */
-static int write_all(int fd, const char *buf, size_t len) 
+static int write_all(int fd, const char *buf, size_t len)
 {
 	size_t rem = len;
-	while (rem > 0) 
+	while (rem > 0)
 	{
 		int written = write(fd, buf, rem);
-		if (written < 0) 
+		if (written < 0)
 			return -1;
 		else if (written == 0)
 			break;
@@ -181,7 +244,7 @@ static Buffer *buffer_truncated_read(Text *txt, size_t size, int fd)
 }
 
 /* allocate a new buffer of MAX(size, BUFFER_SIZE) bytes */
-static Buffer *buffer_alloc(Text *txt, size_t size) 
+static Buffer *buffer_alloc(Text *txt, size_t size)
 {
 	Buffer *buf = calloc(1, sizeof(Buffer));
 	if (!buf)
@@ -202,7 +265,7 @@ static Buffer *buffer_alloc(Text *txt, size_t size)
 }
 
 /* Append data to buffer, assumes there is enough space available */
-static const char *buffer_append(Buffer *buf, const char *data, size_t len) 
+static const char *buffer_append(Buffer *buf, const char *data, size_t len)
 {
 	char *dest = memcpy(buf->data + buf->len, data, len);
 	buf->len += len;
@@ -210,19 +273,19 @@ static const char *buffer_append(Buffer *buf, const char *data, size_t len)
 }
 
 /* check whether buffer has enough free space to store len bytes */
-static bool buffer_capacity(Buffer *buf, size_t len) 
+static bool buffer_capacity(Buffer *buf, size_t len)
 {
 	return buf->size - buf->len >= len;
 }
 
 /* stores the given data in a buffer, allocates a new one if necessary.
-* returns a pointer to the storage location or NULL if allocation failed. 
+* returns a pointer to the storage location or NULL if allocation failed.
 */
-static const char *buffer_store(Text *txt, const char *data, size_t len) 
+static const char *buffer_store(Text *txt, const char *data, size_t len)
 {
 	Buffer *buf = txt->buffers;
 	// if buf == NULL or buffer can't not contains data, alloc a new buffer.
-	if (!buf || !buffer_capacity(buf, len)) 
+	if (!buf || !buffer_capacity(buf, len))
 	{
 		if (!(buf = buffer_alloc(txt, len)))
 			return NULL;
@@ -233,17 +296,17 @@ static const char *buffer_store(Text *txt, const char *data, size_t len)
 
 
 /* Read content of file to memery with buffer.*/
-static Buffer *buffer_read(Text *txt, size_t size, int fd) 
+static Buffer *buffer_read(Text *txt, size_t size, int fd)
 {
 	Buffer *buf = buffer_alloc(txt, size);
 	if (!buf)
 		return NULL;
-	while (size > 0) 
+	while (size > 0)
 	{
 		char data[READ_BUFF_SIZE];
 		int len = read(fd, data, MIN(sizeof(data), size));
 		// read failed.
-		if (len == -1) 
+		if (len == -1)
 		{
 			txt->buffers = buf->next;
 			buffer_free(buf);
@@ -252,7 +315,7 @@ static Buffer *buffer_read(Text *txt, size_t size, int fd)
 		// read over.
 		else if (len == 0)
 			break;
-		else 
+		else
 		{
 			buffer_append(buf, data, len);
 			size -= len;
@@ -281,13 +344,13 @@ static bool buffer_insert(Buffer *buf, size_t pos, const char *data, size_t len)
 
 /* delete data from a buffer at an arbitrary position, this should only be used with
 * data of the most recently created piece. */
-static bool buffer_delete(Buffer *buf, size_t pos, size_t len) 
+static bool buffer_delete(Buffer *buf, size_t pos, size_t len)
 {
 	char *delete; //delete point.
 
 	if (pos + len > buf->len)
 		return false;
-	if (buf->len == pos) 
+	if (buf->len == pos)
 	{
 		buf->len -= len;
 		return true;
@@ -299,8 +362,8 @@ static bool buffer_delete(Buffer *buf, size_t pos, size_t len)
 	return true;
 }
 
-static void buffer_free(Buffer *buf) 
-{ 
+static void buffer_free(Buffer *buf)
+{
 	if (!buf)
 		return;
 	if (buf->type == HEAP)
@@ -311,20 +374,20 @@ static void buffer_free(Buffer *buf)
 	free(buf);
 }
 
-static void lineno_cache_invalidate(LineCache *cache) 
+static void lineno_cache_invalidate(LineCache *cache)
 {
 	cache->pos = 0;
 	cache->lineno = 1;
 }
 
 
-/* Check whether the given piece was the most recently modified one. 
+/* Check whether the given piece was the most recently modified one.
 * There are three conditions required:
 *	1) txt->cache == p;
 *	2) this piece is one of the most recently change's new span's piece.
 *   3) the piece contains the last piece of buffer.
 */
-static bool cache_contains(Text *txt, Piece *p) 
+static bool cache_contains(Text *txt, Piece *p)
 {
 	Buffer *buf = txt->buffers;
 	Action *a = txt->current_action;
@@ -347,7 +410,7 @@ static bool cache_contains(Text *txt, Piece *p)
 }
 
 /* cache the given piece if it is the most recently changed one */
-static void cache_piece(Text *txt, Piece *p) 
+static void cache_piece(Text *txt, Piece *p)
 {
 	Buffer *buf = txt->buffers;
 	if (!buf || p->data < buf->data || p->data + p->len != buf->data + buf->len)
@@ -355,10 +418,10 @@ static void cache_piece(Text *txt, Piece *p)
 	txt->cache = p;
 }
 
-/* Try to insert a junk of data at a given piece offset. the insertion 
-* is only performed if the piece is the most recenetly changed one. 
+/* Try to insert a junk of data at a given piece offset. the insertion
+* is only performed if the piece is the most recenetly changed one.
 */
-static bool cache_insert(Text *txt, Piece *p, size_t off, const char *data, size_t len) 
+static bool cache_insert(Text *txt, Piece *p, size_t off, const char *data, size_t len)
 {
 	Buffer *buf;
 	size_t bufpos;
@@ -378,7 +441,7 @@ static bool cache_insert(Text *txt, Piece *p, size_t off, const char *data, size
 * performed if the piece is the most recenetly changed one and the whole
 * affected range lies within it. the legnth of the piece, the span containing it
 * and the whole text is adjusted accordingly */
-static bool cache_delete(Text *txt, Piece *p, size_t off, size_t len) 
+static bool cache_delete(Text *txt, Piece *p, size_t off, size_t len)
 {
 	Buffer *buf;
 	size_t bufpos;
@@ -394,7 +457,7 @@ static bool cache_delete(Text *txt, Piece *p, size_t off, size_t len)
 	return true;
 }
 
-static Piece *piece_alloc(Text *txt) 
+static Piece *piece_alloc(Text *txt)
 {
 	Piece *p = calloc(1, sizeof(Piece));
 	if (!p)
@@ -408,7 +471,8 @@ static Piece *piece_alloc(Text *txt)
 	return p;
 }
 
-static void piece_init(Piece *p, Piece *prev, Piece *next, const char *data, size_t len) 
+
+static void piece_init(Piece *p, Piece *prev, Piece *next, const char *data, size_t len)
 {
 	p->prev = prev;
 	p->next = next;
@@ -416,12 +480,12 @@ static void piece_init(Piece *p, Piece *prev, Piece *next, const char *data, siz
 	p->len = len;
 }
 
-/* Returns the piece holding the text at byte offset pos. 
-* Note: 
+/* Returns the piece holding the text at byte offset pos.
+* Note:
 *	1) In particular if pos is zero, the begin sentinel piece is returned.
 *   2) if pos happens to be at a piece boundry, return the previous piece.
 *      i.e. when the byte is the first byte of a piece, the previous that
-*      don't contains this byte is been returned with an offest of 
+*      don't contains this byte is been returned with an offest of
 *      piece->len.
 *      This is make modificate piece chain more conveniently when returned
 *      piece are both needed.
@@ -434,7 +498,7 @@ static Location piece_get_intern(Text *txt, size_t pos)
 
 	for (p = &txt->begin; p->next; p = p->next)
 	{
-		if (cur <= pos && pos <= cur + p->len) 
+		if (cur <= pos && pos <= cur + p->len)
 		{
 			loc.off = pos - cur;
 			loc.piece = p;
@@ -451,15 +515,15 @@ static Location piece_get_intern(Text *txt, size_t pos)
 * it pos is the end of file (== text_size()) and the file is not empty then
 * the last piece holding data is returned.
 */
-static Location piece_get_extern(Text *txt, size_t pos) 
+static Location piece_get_extern(Text *txt, size_t pos)
 {
 	size_t cur = 0;
-	Location loc = {NULL, 0};
+	Location loc = { NULL, 0 };
 	Piece *p;
 
-	if (pos > 0 && pos == txt->size) 
+	if (pos > 0 && pos == txt->size)
 	{
-		for(p = txt->begin.next; p->next->next; p = p->next)
+		for (p = txt->begin.next; p->next->next; p = p->next)
 			;
 		loc.off = p->len;
 		loc.piece = p;
@@ -479,7 +543,7 @@ static Location piece_get_extern(Text *txt, size_t pos)
 }
 /* Get start and end location releted to start_pos and end_pos.
 * Note:
-*   1) Since piece_get_intern is used in this function, 
+*   1) Since piece_get_intern is used in this function,
 *	 the notes of piece_get_intern must to be read.
 */
 static bool piece_get_two_intern(Text *txt, size_t start_pos, size_t end_pos, Location *start_loc, Location *end_loc)
@@ -508,7 +572,7 @@ static bool piece_get_two_intern(Text *txt, size_t start_pos, size_t end_pos, Lo
 	return false;
 }
 
-static void piece_free(Piece *p) 
+static void piece_free(Piece *p)
 {
 	if (!p)
 		return;
@@ -525,7 +589,7 @@ static void piece_free(Piece *p)
 
 /* allocate a new change, associate it with current action or a newly
 * allocated one if none exists. */
-static Change *change_alloc(Text *txt, size_t pos) 
+static Change *change_alloc(Text *txt, size_t pos)
 {
 	Action *a = txt->current_action;
 	Change *c;
@@ -545,7 +609,7 @@ static Change *change_alloc(Text *txt, size_t pos)
 	return c;
 }
 
-static void change_free(Change *c) 
+static void change_free(Change *c)
 {
 	if (!c)
 		return;
@@ -556,7 +620,7 @@ static void change_free(Change *c)
 	free(c);
 }
 
-static void action_free(Action *a) 
+static void action_free(Action *a)
 {
 	Change *next, *c;
 	if (!a)
@@ -569,11 +633,11 @@ static void action_free(Action *a)
 }
 
 /* undo all change linked with action. */
-static size_t action_undo(Text *txt, Action *a) 
+static size_t action_undo(Text *txt, Action *a)
 {
 	size_t pos = EPOS;
 	Change *c = a->change;
-	for (; c; c = c->next) 
+	for (; c; c = c->next)
 	{
 		span_swap(txt, &c->new, &c->old);
 		pos = c->pos;
@@ -582,13 +646,13 @@ static size_t action_undo(Text *txt, Action *a)
 }
 
 
-static size_t action_redo(Text *txt, Action *a) 
+static size_t action_redo(Text *txt, Action *a)
 {
 	size_t pos = EPOS;
 	Change *c = a->change;
 	while (c->next)
 		c = c->next;
-	for (; c; c = c->prev) 
+	for (; c; c = c->prev)
 	{
 		span_swap(txt, &c->old, &c->new);
 		pos = c->pos;
@@ -598,12 +662,12 @@ static size_t action_redo(Text *txt, Action *a)
 	return pos;
 }
 
-/* allocate a new action, set its pointers 
+/* allocate a new action, set its pointers
 * to the other actions in the history,
-* and set it as txt->history. All further 
-* changes will be associated with this action. 
+* and set it as txt->history. All further
+* changes will be associated with this action.
 */
-static Action *action_alloc(Text *txt) 
+static Action *action_alloc(Text *txt)
 {
 	Action *new = calloc(1, sizeof(Action));
 	if (!new)
@@ -636,7 +700,7 @@ static Action *action_alloc(Text *txt)
 
 
 /* initialize a span and calculate its length */
-static void span_init(Span *span, Piece *start, Piece *end) 
+static void span_init(Span *span, Piece *start, Piece *end)
 {
 	size_t len = 0;
 	Piece *p;
@@ -654,29 +718,29 @@ static void span_init(Span *span, Piece *start, Piece *end)
 *
 *  - if old is an empty span do not remove anything, just insert the new one
 *  - if new is an empty span do not insert anything, just remove the old one
-*  
+*
 *	1. adjusts the document size accordingly.
-*   2. make sure new_span->start->prev and new_span->end->next point 
+*   2. make sure new_span->start->prev and new_span->end->next point
 *      at correct pieces.
 */
-static void span_swap(Text *txt, Span *old_span, Span *new_span) 
+static void span_swap(Text *txt, Span *old_span, Span *new_span)
 {
 	if (old_span->len == 0 && new_span->len == 0) {
 		return;
 	}
-	else if (old_span->len == 0) 
+	else if (old_span->len == 0)
 	{
 		/* insert new span */
 		new_span->start->prev->next = new_span->start;
 		new_span->end->next->prev = new_span->end;
 	}
-	else if (new_span->len == 0) 
+	else if (new_span->len == 0)
 	{
 		/* delete old span */
 		old_span->start->prev->next = old_span->end->next;
 		old_span->end->next->prev = old_span->start->prev;
 	}
-	else 
+	else
 	{
 		/* replace old with new */
 		old_span->start->prev->next = new_span->start;
@@ -686,7 +750,7 @@ static void span_swap(Text *txt, Span *old_span, Span *new_span)
 	txt->size += new_span->len;
 }
 
-Iterator iterator_get(Text *txt, size_t pos) 
+Iterator iterator_get(Text *txt, size_t pos)
 {
 	Iterator it;
 	Location loc = piece_get_extern(txt, pos);
@@ -694,7 +758,7 @@ Iterator iterator_get(Text *txt, size_t pos)
 	return it;
 }
 
-static bool iterator_init(Iterator *it, size_t pos, Piece *p, size_t off) 
+static bool iterator_init(Iterator *it, size_t pos, Piece *p, size_t off)
 {
 	it->pos = pos;
 	it->piece = p;
@@ -720,7 +784,7 @@ bool iterator_valid(const Iterator *it)
 	return it->piece && it->piece->text;
 }
 
-bool iterator_byte_get(Iterator *it, char *b) 
+bool iterator_byte_get(Iterator *it, char *b)
 {
 	if (iterator_valid(it)) {
 		if (it->start <= it->text && it->text < it->end) {
@@ -735,13 +799,13 @@ bool iterator_byte_get(Iterator *it, char *b)
 	return false;
 }
 
-bool iterator_byte_next(Iterator *it, char *b) 
+bool iterator_byte_next(Iterator *it, char *b)
 {
 	if (!iterator_valid(it))
 		return false;
 	it->text++;
 	/* special case for advancement to EOF */
-	if (it->text == it->end && !it->piece->next->text) 
+	if (it->text == it->end && !it->piece->next->text)
 	{
 		it->pos++;
 		if (b)
@@ -749,7 +813,7 @@ bool iterator_byte_next(Iterator *it, char *b)
 		return true;
 	}
 	/* Case for iterator must be iterated without iterate it->pos. */
-	while (it->text >= it->end) 
+	while (it->text >= it->end)
 	{
 		if (!iterator_next(it))
 			return false;
@@ -761,12 +825,12 @@ bool iterator_byte_next(Iterator *it, char *b)
 	return true;
 }
 
-bool iterator_byte_prev(Iterator *it, char *b) 
+bool iterator_byte_prev(Iterator *it, char *b)
 {
 	if (!iterator_valid(it))
 		return false;
 	// iterate iterator previously until Iterator->text == Iterator->start
-	while (it->text == it->start) 
+	while (it->text == it->start)
 	{
 		if (!iterator_prev(it))
 			return false;
@@ -781,7 +845,7 @@ bool iterator_byte_prev(Iterator *it, char *b)
 
 /* load the given file as starting point for further editing operations.
 * to start with an empty document, pass NULL as filename. */
-Text *text_load(const char *filename) 
+Text *text_load(const char *filename)
 {
 	int fd = -1;
 	size_t size;
@@ -828,29 +892,29 @@ out:
 	return NULL;
 }
 
-bool text_save(Text *txt, const char *filename) 
+bool text_save(Text *txt, const char *filename)
 {
 	int fd = -1;
 	if (filename) {
-		if ((fd = open(filename, O_CREAT | O_RDWR | O_TEXT, S_IREAD | S_IWRITE)) == -1) 
+		if ((fd = open(filename, O_CREAT | O_RDWR | O_TEXT, S_IREAD | S_IWRITE)) == -1)
 		{
 			perror("open failed.");
 			return false;
 		}
-			
+
 		if (text_write(txt, fd) == -1)
 		{
 			perror("write failed.");
 			return false;
 		}
-			
+
 	}
-	if(fd != -1)
+	if (fd != -1)
 		close(fd);
 	return true;
 }
 
-int text_write(Text *txt, int fd) 
+int text_write(Text *txt, int fd)
 {
 	Filerange r;
 	r.start = 0;
@@ -858,11 +922,11 @@ int text_write(Text *txt, int fd)
 	return text_write_range(txt, &r, fd);
 }
 
-int text_write_range(Text *txt, Filerange *range, int fd) 
+int text_write_range(Text *txt, Filerange *range, int fd)
 {
 	size_t size = text_range_size(range), rem = size;
 	Iterator it = iterator_get(txt, range->start);
-	for (; rem > 0 && iterator_valid(&it); iterator_next(&it)) 
+	for (; rem > 0 && iterator_valid(&it); iterator_next(&it))
 	{
 		size_t prem = it.end - it.text;
 		int written;
@@ -906,7 +970,7 @@ size_t text_redo(Text *txt) {
 	return pos;
 }
 
-void text_free(Text *txt) 
+void text_free(Text *txt)
 {
 	if (!txt)
 		return;
@@ -972,10 +1036,10 @@ void text_free(Text *txt)
 *      | |     |short|     | existing text |     | |
 *      \-+ <-- +-----+ <-- +---------------+ <-- +-/
 */
-bool text_insert(Text *txt, size_t pos, const char *data, size_t len) 
+bool text_insert(Text *txt, size_t pos, const char *data, size_t len)
 {
 	Location loc;
-	Piece *p, *new = NULL ; 
+	Piece *p, *new = NULL;
 	size_t off;
 	Change *c;
 
@@ -997,12 +1061,12 @@ bool text_insert(Text *txt, size_t pos, const char *data, size_t len)
 	// store data first.
 	if (!(data = buffer_store(txt, data, len)))
 		return false;
-	
+
 	// recoding change for re/undo.
 	c = change_alloc(txt, pos);
 	if (!c)
 		return false;
-	if (off == p->len) 
+	if (off == p->len)
 	{
 		/* insert between two existing pieces, hence there is nothing to
 		* remove, just add a new piece holding the extra text */
@@ -1012,7 +1076,7 @@ bool text_insert(Text *txt, size_t pos, const char *data, size_t len)
 		span_init(&c->new, new, new);
 		span_init(&c->old, NULL, NULL);
 	}
-	else 
+	else
 	{
 		/* insert into middle of an existing piece, therfore split the old
 		* piece. that is we have 3 new pieces one containing the content
@@ -1051,7 +1115,7 @@ bool text_insert(Text *txt, size_t pos, const char *data, size_t len)
 *      | |     | exi|     |t |     | |
 *      \-+ <-- +----+ <-- +--+ <-- +-/
 */
-bool text_delete(Text *txt, size_t pos, size_t len) 
+bool text_delete(Text *txt, size_t pos, size_t len)
 {
 	Location start_loc, end_loc;
 	Change *c;
@@ -1098,7 +1162,7 @@ bool text_delete(Text *txt, size_t pos, size_t len)
 		piece_init(new_end, old_start->prev, old_end->next, old_end->data + end_loc.off, old_end->len - end_loc.off);
 		new_start = new_end;
 	}
-	else 
+	else
 	{
 		old_start = start_loc.piece;
 		old_end = end_loc.piece;
@@ -1121,17 +1185,17 @@ bool text_delete(Text *txt, size_t pos, size_t len)
 	return true;
 }
 
-bool text_range_valid(const Filerange *r) 
+bool text_range_valid(const Filerange *r)
 {
 	return r->start != EPOS && r->end != EPOS && r->start <= r->end;
 }
 
-size_t text_range_size(const Filerange *r) 
+size_t text_range_size(const Filerange *r)
 {
 	return text_range_valid(r) ? r->end - r->start : 0;
 }
 
-bool text_delete_range(Text *txt, Filerange *r) 
+bool text_delete_range(Text *txt, Filerange *r)
 {
 	if (!text_range_valid(r))
 		return false;
@@ -1178,8 +1242,8 @@ static bool test_print_span(Piece *start, Piece *end, size_t lim)
 void test_print_buffer(Text *txt)
 {
 	Buffer *buf;
-	
-	for (buf = txt->buffers; buf ; buf = buf->next)
+
+	for (buf = txt->buffers; buf; buf = buf->next)
 	{
 		fprintf(stderr, "\n***[BUFFER CONTENT]***\n");
 		fprintf(stderr, "%.*s\n", (int)txt->buffers->len, txt->buffers->data);
@@ -1194,7 +1258,7 @@ void test_print_piece(Text *txt)
 	for (p = txt->begin.next; p->next; p = p->next)
 	{
 		fprintf(stderr, "+-------+--------+---------------------+\n");
-		fprintf(stderr, "+   %c   +  %3u   +  %.*s\n", *(p->data), p->len,(int)(p->len), p->data);
+		fprintf(stderr, "+   %c   +  %3u   +  %.*s\n", *(p->data), p->len, (int)(p->len), p->data);
 	}
 	fprintf(stderr, "+-------+--------+---------------------+\n");
 }
@@ -1206,7 +1270,7 @@ void test_print_current_action(Text *txt)
 	fprintf(stderr, "|  Type   |   Size  |	 pos  |     Pieces content     |\n");
 	fprintf(stderr, "&*********&*********&*******&************************&\n");
 	if (!txt->current_action)
-		return ;
+		return;
 	for (c = txt->current_action->change; c; c = c->next)
 	{
 		fprintf(stderr, "|   new   |  %5u  |  %3u  |  ", c->new.len, c->pos);

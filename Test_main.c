@@ -11,21 +11,47 @@ int main(void)
 	Iterator it;
 	char c;
 	int len = 0;
+	int start, end;
 	size_t pos = 0,i;
 	char str[30] = { 0 };
 	Iterator its = iterator_get(txt, text_size(txt));
+	ClipBorad *cli = clipborad_init();
+	Filerange r;
 	freopen(".\\editor.log", "w", stderr);
 	
 	showfile(txt);
 	printf("Power-editor cmd version.\n");
 	printf("s for save, ! for quit.\n");
 	printf("r for redo, u for undo, i for insert, d for delete a for append.\n");
+	printf("c for copy, t for cut, p for paste\n");
 	printf("----------------------------\n");
 	while ((c = getchar())!='!')
 	{
 		while(getchar() != '\n');
 		switch (c)
 		{
+		case 'c':
+			printf("copy start and end:  ");
+			scanf("%d %d", &start, &end);
+			r.start = start;
+			r.end = end;
+			while (getchar() != '\n');
+			text_copy(cli, txt, &r);
+			break;
+		case 't':
+			printf("cut start and end:  ");
+			scanf("%d %d", &start, &end);
+			r.start = start;
+			r.end = end;
+			while (getchar() != '\n');
+			text_cut(cli, txt, &r);
+			break;
+		case 'p':
+			printf("paste at: ");
+			scanf("%d", &pos);
+			while (getchar() != '\n');
+			text_paste(cli, txt, pos);
+			break;
 		case 's':
 			if (!text_save(txt, "C:\\Users\\Jinxiapu\\Desktop\\1.txt"))
 				printf("save file failed.\n");
@@ -72,7 +98,7 @@ int main(void)
 	test_print_piece(txt);
 	test_print_current_action(txt);
 #endif // DEBUG
-	
+	clipborad_close(cli);
 	text_free(txt);
 	getchar();
 	return 0;

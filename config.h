@@ -12,4 +12,7 @@
 
 #define CONFIG_MAIN_MEMU_NUM 4
 
+#define CONFIG_FILE_TRUNCATE_SIZE ((size_t) 1 << 15)
+#define CONFIG_CLIPBORAD_SIZE ((size_t) 1 << 14)
+
 #endif // !__CONFIG_H__

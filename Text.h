@@ -26,6 +26,7 @@
 typedef struct Text Text;
 typedef struct Piece Piece;
 typedef struct TextSave TextSave;
+typedef struct ClipBorad ClipBorad;
 
 /* Filerange means range in bytes from start of the file to the end. */
 typedef struct {
@@ -91,6 +92,13 @@ bool iterator_valid(const Iterator *it);
 
 bool iterator_byte_next(Iterator *it, char *b);
 bool iterator_byte_prev(Iterator *it, char *b);
+
+
+void clipborad_close(ClipBorad *cli);
+ClipBorad *clipborad_init(void);
+bool text_copy(ClipBorad *cli, Text *txt, Filerange *r);
+bool text_paste(ClipBorad *cli, Text *txt, size_t pos);
+bool text_cut(ClipBorad *cli, Text *txt, Filerange *r);
 
 #ifdef DEBUG
 void test_print_buffer(Text *txt);
