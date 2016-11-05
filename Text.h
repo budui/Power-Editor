@@ -83,7 +83,6 @@ size_t text_redo(Text*);
 /* Functions for iterating. */
 
 Iterator iterator_get(Text *txt, size_t pos);
-
 bool iterator_next(Iterator *it);
 bool iterator_prev(Iterator *it);
 
@@ -93,13 +92,31 @@ bool iterator_valid(const Iterator *it);
 bool iterator_byte_next(Iterator *it, char *b);
 bool iterator_byte_prev(Iterator *it, char *b);
 
-
+/* close clipborad. free all source. */
 void clipborad_close(ClipBorad *cli);
+/* malloc an area for clipborad, size is CONFIG_CLIPBORAD_SIZE. 
+* which means you can not copy or cut str longer than CONFIG_CLOPBOAD_SIZE.
+*/
 ClipBorad *clipborad_init(void);
+/* copy text start at r.start and end before r.end, that's [start,end).
+*  size_limits is ClipBorad's size.
+*/
 bool text_copy(ClipBorad *cli, Text *txt, Filerange *r);
-bool text_paste(ClipBorad *cli, Text *txt, size_t pos);
+/* cut text start at r.start and end before r.end, that's [start,end).
+*  size_limits is ClipBorad's size.
+*/
 bool text_cut(ClipBorad *cli, Text *txt, Filerange *r);
+/* paste text at pos. if there is no content in clipboard,return false.
+* text content begin at 0.
+*/
+bool text_paste(ClipBorad *cli, Text *txt, size_t pos);
 
+/* text_find_next/prev return pos when not find. 
+* when finded, return the find pos.
+* s must be a string not a char array.
+*/
+size_t text_find_next(Text *txt, size_t pos, const char *s);
+size_t text_find_prev(Text *txt, size_t pos, const char *s);
 #ifdef DEBUG
 void test_print_buffer(Text *txt);
 void test_print_piece(Text *txt);

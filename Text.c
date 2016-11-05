@@ -1217,6 +1217,59 @@ size_t text_size(Text *txt)
 	return txt->size;
 }
 
+size_t text_find_next(Text *txt, size_t pos, const char *s) 
+{
+	char c;
+	size_t len = strlen(s), matched = 0;
+	Iterator it = iterator_get(txt, pos), sit;
+	if (!s)
+		return pos;
+	while (matched < len && iterator_byte_get(&it, &c)) 
+	{
+		if (c == s[matched]) 
+		{
+			if (matched == 0)
+				sit = it;
+			matched++;
+		}
+		else if (matched > 0) 
+		{
+			it = sit;
+			matched = 0;
+		}
+		iterator_byte_next(&it, NULL);
+	}
+	return matched == len ? it.pos - len : pos;
+}
+
+size_t text_find_prev(Text *txt, size_t pos, const char *s) 
+{
+	size_t len = strlen(s), matched = len - 1;
+	Iterator it = iterator_get(txt, pos), sit;
+	char c;
+	if (!s)
+		return pos;
+	if (len == 0)
+		return pos;
+	while(iterator_byte_prev(&it, &c))
+	{
+		if (c == s[matched]) 
+		{
+			if (matched == 0)
+				return it.pos;
+			if (matched == len - 1)
+				sit = it;
+			matched--;
+		}
+		else if (matched < len - 1) 
+		{
+			it = sit;
+			matched = len - 1;
+		}
+	}
+	return pos;
+}
+
 #ifdef DEBUG
 
 /* if set debug mode, open log file to recode log. */

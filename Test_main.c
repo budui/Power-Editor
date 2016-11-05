@@ -24,12 +24,36 @@ int main(void)
 	printf("s for save, ! for quit.\n");
 	printf("r for redo, u for undo, i for insert, d for delete a for append.\n");
 	printf("c for copy, t for cut, p for paste\n");
+	printf("f for search");
 	printf("----------------------------\n");
 	while ((c = getchar())!='!')
 	{
 		while(getchar() != '\n');
 		switch (c)
 		{
+		case 'f':
+			switch (getchar())
+			{
+			case 'p':
+				printf("search start at: ");
+				scanf("%d", &pos);
+				while (getchar() != '\n');
+				printf("find content: ");
+				fgets(str, 30, stdin);
+				delenter(str);
+				printf("find at :%d\n", text_find_prev(txt, pos, str));
+				break;
+			case 'n':
+				printf("search start at: ");
+				scanf("%d", &pos);
+				while (getchar() != '\n');
+				printf("find content: ");
+				fgets(str, 30, stdin);
+				delenter(str);
+				printf("find at :%d\n", text_find_next(txt, pos, str));
+				break;
+			}
+			break;
 		case 'c':
 			printf("copy start and end:  ");
 			scanf("%d %d", &start, &end);
