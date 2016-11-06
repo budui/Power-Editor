@@ -125,16 +125,20 @@ int print_str_xy(const char *s, int x,int y)
 
     while(*s != NULL)
     {
-        while(x < 640 && (*s != NULL))
+        if (ISGBK(*s))
         {
-			char2mat(handle,s,mat);
+            char2mat(handle,s,mat);
             showchinese(x,y,mat,BLACK,LIGHTGRAY);
-            x += 16;
             s += 2;
-            i++;
+            x += 16;
         }
-        x += 24; 
-        y += 20;
+        else
+        {
+            settextstyle(0,HORIZ_DIR,2);
+            outtextxy(x,y,s);
+            x += 16;
+            s++;
+        }
     }
     return i;
 }

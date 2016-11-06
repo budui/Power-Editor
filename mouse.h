@@ -19,7 +19,7 @@ int hidemouseptr(void);
 * return true when keyboard is hit or button is click.
 * (getmousepos(&button,&x,&y) && !button): keyboard is hit.
 * (getmousepos(&button,&x,&y) && button): mouse is clicked.
-* (!getmousepos): mouse jusr move.
+* (!getmousepos): mouse just move.
 */
 bool getmousepos(int *button,int *x,int *y);
 

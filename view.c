@@ -29,6 +29,16 @@
 
 #define SHADOW_IN 1
 #define SHADOW_OUT 2
+
+#define INPUTBOX_MINX 200
+#define INPUTBOX_MINY 165
+#define INPUTBOX_MAXX 420
+#define INPUTBOX_MAXY 300
+#define INPUTBOX_EDIT_MINX 225
+#define INPUTBOX_EDIT_MINY 220
+#define INPUTBOX_EDIT_MAXX 395
+#define INPUTBOX_EDIT_MAXY 240
+
 static int is_arrow_key_hit(int flag);
 static void sub_menu_change(int x1,int choice,int flag);
 static void main_menu_change(int choice, int flag);
@@ -38,7 +48,7 @@ static void draw_shadow(int x1,int y1,int x2,int y2, int flag,int inner);
 static void get_sub_menu_choice(menuptr m);
 static bool sub_menu_hidden(char far *buf,int x,int y);
 static char far *sub_menu_show(menuptr m);
-
+static char far *inputbox_show(char *);
 
 static void draw_shadow(int x1,int y1,int x2,int y2, int flag,int inner)
 {
@@ -229,7 +239,6 @@ bool view_run_func(menuptr m)
     {
     case MENU_MAIN_FILE:
     case MENU_MAIN_EDIT:
-    case MENU_MAIN_OPTION:
     case MENU_MAIN_HELP:
         get_sub_menu_choice(m);
         break;
@@ -237,10 +246,12 @@ bool view_run_func(menuptr m)
         outtextxy(100,100,"aaaa");
         break;
     case MENU_SUB_OPENFILE:
+        inputbox_manager("");
         break;
     case MENU_SUB_SAVE:
         break;
     case MENU_SUB_SAVEAS:
+        inputbox_manager("");
         break;
     case MENU_SUB_EXIT:
         break;
@@ -259,16 +270,6 @@ bool view_run_func(menuptr m)
     case MENU_SUB_FIND:
         break;
     case MENU_SUB_REPLACE:
-        break;
-    case MENU_SUB_SELECTALL:
-        break;
-    case MENU_SUB_TIME:
-        break;
-    case MENU_SUB_AUTOLINE:
-        break;
-    case MEUN_SUB_FONT:
-        break;
-    case MENU_SUB_HOTKEY:
         break;
     case MENU_SUB_ABOUT:
         break;
@@ -573,8 +574,8 @@ void menu_key_manager(menuptr root)
                     break;
                 case ENTER:
                     if(choice){
-                        view_run_func(GetMenuByNum(m,choice));
                         sub_menu_hidden(buf,x1,SUB_MENU_Y);
+                        view_run_func(GetMenuByNum(m,choice));
                         choice = MenuChildNum(root,m);
                         main_menu_change(choice,MAIN_BORDER_QUIT);
                         return;
@@ -596,6 +597,140 @@ void menu_key_manager(menuptr root)
         sub_menu_hidden(buf,x1,SUB_MENU_Y);
         choice = MenuChildNum(root,m);
         main_menu_change(choice,MAIN_BORDER_QUIT);
+    }
+}
+/*
+static void messagebox_hidden(char far *buf)
+{
+
+}
+static char far *messagebox_show(char * message)
+{
+
+}
+void view_messagebox(char * message)
+{
+
+}*/
+
+
+
+static void inputbox_hidden(char far* buf)
+{
+    if(!buf)
+        return;
+    hidemouseptr();
+    putimage(INPUTBOX_MINX,INPUTBOX_MINY,buf,COPY_PUT);
+    farfree(buf);
+    showmouseptr();
+}
+
+#define BUTTON_SIZE_X 46
+#define BUTTON_SIZE_Y 23
+static void draw_button(int x1,int y1,char *str)
+{
+    int x2 = x1 + BUTTON_SIZE_X;
+    int y2 = y1 + BUTTON_SIZE_Y;
+
+    setcolor(WHITE);
+    line(x1,y1,x2,y1);
+    line(x1,y1,x1,y2);
+    setcolor(DARKGRAY);
+    line(x2,y2,x2,y1);
+    line(x2,y2,x1,y2);
+    print_str_xy(str,x1+7,y1+3);
+}
+
+static char far *inputbox_show(char *message)
+{
+	char far *buf;
+    buf = (char far*)farmalloc(imagesize(INPUTBOX_MINX,INPUTBOX_MINY,INPUTBOX_MAXX+2,INPUTBOX_MAXY+2));
+    if(!buf)
+        return NULL;
+    hidemouseptr();
+    getimage(INPUTBOX_MINX,INPUTBOX_MINY,INPUTBOX_MAXX+2,INPUTBOX_MAXY+2,buf);
+    //biggest window.
+    draw_shadow(INPUTBOX_MINX,INPUTBOX_MINY,INPUTBOX_MAXX,INPUTBOX_MAXY,SHADOW_OUT,LIGHTGRAY);
+    //name bar.
+    setfillstyle(SOLID_FILL,BLUE);
+    bar(INPUTBOX_MINX+3,INPUTBOX_MINY+3,INPUTBOX_MAXX-3,INPUTBOX_MINY+19);
+    //editor name.
+    settextstyle(SMALL_FONT,0,5);
+    setcolor(WHITE);
+    outtextxy(INPUTBOX_MINX+25,INPUTBOX_MINY+2,EDITOR_NAME);
+    //edit window
+    draw_shadow(INPUTBOX_EDIT_MINX,INPUTBOX_EDIT_MINY,INPUTBOX_EDIT_MAXX,INPUTBOX_EDIT_MAXY,SHADOW_IN,WHITE);
+    //button
+    draw_closebutt(INPUTBOX_MAXX-15,INPUTBOX_MINY+8);
+    draw_button(INPUTBOX_EDIT_MINX-2,INPUTBOX_EDIT_MAXY+15,"ȷ?");
+    draw_button(INPUTBOX_EDIT_MAXX-40,INPUTBOX_EDIT_MAXY+15,"ȡ?");
+    //icon
+    draw_icon(INPUTBOX_MINX+7,INPUTBOX_MINY-1);
+	print_str_xy(message,INPUTBOX_MINX + 5,INPUTBOX_MINY +30);
+    showmouseptr();
+    return buf;
+}
+#define INPUTBOX_TEXT_SIZE 30
+char *inputbox_manager(char *message)
+{
+    int button,mousex,mousey;
+    char far *buf = inputbox_show(message);
+	char* str = (char *)calloc(INPUTBOX_TEXT_SIZE,1);
+    int i = 0;
+    int x,y;
+    int key;
+    while(1)
+    {
+        if(!getmousepos(&button,&mousex,&mousey))
+            continue;
+        if(bioskey(1) && (key=bioskey(0)%(1<<8)) && (key < 128))
+        {
+            if(key==0x0d)//ENTER
+            {
+                inputbox_hidden(buf);
+                return str;
+            }
+            if(key==0x08)//BACKSPACE
+            {
+                if(i){
+                    i--;
+                    str[i] = '\0';
+                }
+            }
+            else if (i < INPUTBOX_TEXT_SIZE && key>=0x20)//input common char.
+            {
+                str[i] = key;
+                i++;
+            }
+            setcolor(BLACK);
+            setfillstyle(SOLID_FILL,WHITE);
+            bar(INPUTBOX_EDIT_MINX+2,INPUTBOX_EDIT_MINY+3,INPUTBOX_EDIT_MAXX-2,INPUTBOX_EDIT_MAXY-2);
+            settextstyle(SMALL_FONT,0,5);
+            outtextxy(INPUTBOX_EDIT_MINX+2,INPUTBOX_EDIT_MINY+2,str);
+        }
+        else if(button == MOUSE_LEFTPRESS)
+        {
+            if(mousex>=INPUTBOX_EDIT_MINX-2&&mousex<=INPUTBOX_EDIT_MINX-2+BUTTON_SIZE_X\
+                &&mousey>=INPUTBOX_EDIT_MAXY+15&&mousey<=INPUTBOX_EDIT_MAXY+15+BUTTON_SIZE_Y)
+            { //yes button
+                inputbox_hidden(buf);
+                return str;
+            }
+            if(mousex>=INPUTBOX_EDIT_MAXX-40&&mousex<=INPUTBOX_EDIT_MAXX-40+BUTTON_SIZE_X\
+                &&mousey>=INPUTBOX_EDIT_MAXY+15&&mousey<=INPUTBOX_EDIT_MAXY+15+BUTTON_SIZE_Y)
+            { //cancel button
+                free(str);
+                inputbox_hidden(buf);
+                return NULL;
+            }
+            if(mousex>=INPUTBOX_MAXX-20 && mousex<=INPUTBOX_MAXX-6 \
+                && mousey>=INPUTBOX_MINY-1 && mousey<=INPUTBOX_MINY+17)
+            { //close button
+                free(str);
+                inputbox_hidden(buf);
+                return NULL;
+            }
+        }
     }
 }
 

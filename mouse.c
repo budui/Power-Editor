@@ -91,11 +91,9 @@ bool getmousepos(int *button,int *x,int *y)
     }while(*x == x0 && *y == y0 && *button == button0 || ishidden);
 
     if(!ishidden){
-        printf("old %d %d\n", oldx,oldy);
         draw_cursor(oldx,oldy);
         oldx = *x;
         oldy = *y;
-        printf("new %d %d\n", *x,*y);
         draw_cursor(*x,*y);
     }
     return *button;
@@ -159,5 +157,4 @@ int main()
         }
     }
 }
-
 */
