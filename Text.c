@@ -61,8 +61,6 @@ struct Action {
 	Action *prev;           /* the parent operation in the undo tree */
 	Action *earlier;        /* the previous Action, chronologically */
 	Action *later;          /* the next Action, chronologically */
-	time_t time;            /* when the first change of this action appears. */
-	size_t seq;             /* a unique, strictly increasing identifier */
 };
 
 /* buffer has three types. FILESWP for very large file.
@@ -110,7 +108,7 @@ struct Text
 	Action *saved_action;   /* last action at the time of the save operation */
 	size_t size;            /* current file content size in bytes */
 	struct stat info;       /* stat as probed at load time */
-	LineCache lines;        /* mapping between absolute pos in bytes and logical line breaks */
+	const char *filename;	/* filename of the txt. */
 };
 
 struct TextSave {                  /* used to hold context between text_save_{begin,commit} calls */
@@ -122,7 +120,6 @@ struct TextSave {                  /* used to hold context between text_save_{be
 
 static int write_all(int fd, const char *buf, size_t count);
 /* buffer layer */
-static Buffer *buffer_truncated_read(Text *txt, size_t size, int fd);
 static Buffer *buffer_alloc(Text *txt, size_t size);
 static const char *buffer_append(Buffer *buf, const char *data, size_t len);
 static bool buffer_capacity(Buffer *buf, size_t len);
@@ -130,8 +127,6 @@ static const char *buffer_store(Text *txt, const char *data, size_t len);
 static bool buffer_insert(Buffer *buf, size_t pos, const char *data, size_t len);
 static Buffer *buffer_read(Text *txt, size_t size, int fd);
 static void buffer_free(Buffer *buf);
-/* Location layer */
-static void lineno_cache_invalidate(LineCache *cache);
 /* Cache layer */
 static bool cache_contains(Text *txt, Piece *p);
 static void cache_piece(Text *txt, Piece *p);
@@ -152,6 +147,12 @@ static void change_free(Change *c);
 static bool iterator_init(Iterator *it, size_t pos, Piece *p, size_t off);
 static void span_swap(Text *txt, Span *old_span, Span *new_span);
 
+/* write the text content to the given file descriptor `fd'. Return the
+* number of bytes written or -1 in case there was an error. */
+int text_write(Text*, int fd);
+int text_write_range(Text *txt, Filerange *range, int fd);
+/* Functions for re/undo. */
+void text_snapshot(Text *txt);
 
 struct ClipBorad {
 	size_t len;
@@ -234,14 +235,6 @@ static int write_all(int fd, const char *buf, size_t len)
 	return len - rem;
 }
 
-
-// TODO: think out a plan to deal with large file.
-/* Truncate file and read when file is too large. */
-static Buffer *buffer_truncated_read(Text *txt, size_t size, int fd)
-{
-	Buffer *buf = buffer_alloc(txt, size);
-	return buf;
-}
 
 /* allocate a new buffer of MAX(size, BUFFER_SIZE) bytes */
 static Buffer *buffer_alloc(Text *txt, size_t size)
@@ -372,12 +365,6 @@ static void buffer_free(Buffer *buf)
 		//farfree(buf->data);
 		;
 	free(buf);
-}
-
-static void lineno_cache_invalidate(LineCache *cache)
-{
-	cache->pos = 0;
-	cache->lineno = 1;
 }
 
 
@@ -672,14 +659,8 @@ static Action *action_alloc(Text *txt)
 	Action *new = calloc(1, sizeof(Action));
 	if (!new)
 		return NULL;
-	new->time = time(NULL);
 	txt->current_action = new;
 
-	/* set sequence number */
-	if (!txt->last_action)
-		new->seq = 0;
-	else
-		new->seq = txt->last_action->seq + 1;
 
 	/* set earlier, later pointers */
 	if (txt->last_action)
@@ -855,27 +836,38 @@ Text *text_load(const char *filename)
 		return NULL;
 	piece_init(&txt->begin, NULL, &txt->end, NULL, 0);
 	piece_init(&txt->end, &txt->begin, NULL, NULL, 0);
-	lineno_cache_invalidate(&txt->lines);
 	if (filename) {
-		if ((fd = open(filename, O_RDONLY)) == -1)
-			goto out;
+		if ((fd = open(filename, O_RDONLY)) == -1) {
+			text_free(txt);
+			return NULL;
+		}
 		// file not found or fd is invalid.
 		if (fstat(fd, &txt->info) == -1)
-			goto out;
+		{
+			close(fd);
+			text_free(txt);
+		}
 		size = txt->info.st_size;
 		if (size < CONFIG_FILE_TRUNCATE_SIZE)
 			txt->buf = buffer_read(txt, size, fd);
 		else
-			txt->buf = buffer_truncated_read(txt, size, fd);
+			return NULL;
 		if (!txt->buf)
-			goto out;
+		{
+			close(fd);
+			text_free(txt);
+		}
 		p = piece_alloc(txt);
 		if (!p)
-			goto out;
+		{
+			close(fd);
+			text_free(txt);
+		}
 		piece_init(&txt->begin, NULL, p, NULL, 0);
 		piece_init(p, &txt->begin, &txt->end, txt->buf->data, txt->buf->len);
 		piece_init(&txt->end, p, NULL, NULL, 0);
 		txt->size = txt->buf->len;
+		txt->filename = filename;
 	}
 	/* write an empty action */
 	change_alloc(txt, EPOS);
@@ -885,14 +877,9 @@ Text *text_load(const char *filename)
 	if (fd != -1)
 		close(fd);
 	return txt;
-out:
-	if (fd != -1)
-		close(fd);
-	text_free(txt);
-	return NULL;
 }
 
-bool text_save(Text *txt, const char *filename)
+bool text_saveas(Text *txt, const char *filename)
 {
 	int fd = -1;
 	if (filename) {
@@ -912,6 +899,27 @@ bool text_save(Text *txt, const char *filename)
 	if (fd != -1)
 		close(fd);
 	return true;
+}
+
+int text_save(Text* txt)
+{
+	int fd = -1;
+	if (txt->filename) {
+		if ((fd = open(txt->filename, O_CREAT | O_RDWR | O_TEXT, S_IREAD | S_IWRITE)) == -1)
+		{
+			perror("open failed.");
+			return 0;
+		}
+
+		if (text_write(txt, fd) == -1)
+		{
+			perror("write failed.");
+			return 0;
+		}
+		close(fd);
+		return 1;
+	}
+	return 2;
 }
 
 int text_write(Text *txt, int fd)
@@ -952,7 +960,6 @@ size_t text_undo(Text *txt) {
 		return pos;
 	pos = action_undo(txt, txt->history);
 	txt->history = a;
-	lineno_cache_invalidate(&txt->lines);
 	return pos;
 }
 
@@ -966,7 +973,6 @@ size_t text_redo(Text *txt) {
 		return pos;
 	pos = action_redo(txt, a);
 	txt->history = a;
-	lineno_cache_invalidate(&txt->lines);
 	return pos;
 }
 
@@ -1048,8 +1054,6 @@ bool text_insert(Text *txt, size_t pos, const char *data, size_t len)
 		return true;
 	if (pos > txt->size)
 		return false;
-	if (pos < txt->lines.pos)
-		lineno_cache_invalidate(&txt->lines);
 	// check whether insert can be completed by cache.
 	loc = piece_get_intern(txt, pos);
 	p = loc.piece;
@@ -1101,6 +1105,11 @@ bool text_insert(Text *txt, size_t pos, const char *data, size_t len)
 	return true;
 }
 
+bool text_modified(Text *txt)
+{
+	return txt->saved_action != txt->history;
+}
+
 /* A delete operation can either start/stop midway through a piece or at
 * a boundry. In the former case a new piece is created to represent the
 * remaining text before/after the modification point.
@@ -1125,9 +1134,6 @@ bool text_delete(Text *txt, size_t pos, size_t len)
 		return true;
 	if (pos + len > txt->size)
 		return false;
-	if (pos < txt->lines.pos)
-		lineno_cache_invalidate(&txt->lines);
-
 
 	if (!piece_get_two_intern(txt, pos, pos + len, &start_loc, &end_loc))
 		return false;
@@ -1217,22 +1223,22 @@ size_t text_size(Text *txt)
 	return txt->size;
 }
 
-size_t text_find_next(Text *txt, size_t pos, const char *s) 
+size_t text_find_next(Text *txt, size_t pos, const char *s)
 {
 	char c;
 	size_t len = strlen(s), matched = 0;
 	Iterator it = iterator_get(txt, pos), sit;
 	if (!s)
 		return pos;
-	while (matched < len && iterator_byte_get(&it, &c)) 
+	while (matched < len && iterator_byte_get(&it, &c))
 	{
-		if (c == s[matched]) 
+		if (c == s[matched])
 		{
 			if (matched == 0)
 				sit = it;
 			matched++;
 		}
-		else if (matched > 0) 
+		else if (matched > 0)
 		{
 			it = sit;
 			matched = 0;
@@ -1242,7 +1248,14 @@ size_t text_find_next(Text *txt, size_t pos, const char *s)
 	return matched == len ? it.pos - len : pos;
 }
 
-size_t text_find_prev(Text *txt, size_t pos, const char *s) 
+bool text_null_file(Text* txt)
+{
+	if (!txt->filename)
+		return true;
+	return false;
+}
+
+size_t text_find_prev(Text *txt, size_t pos, const char *s)
 {
 	size_t len = strlen(s), matched = len - 1;
 	Iterator it = iterator_get(txt, pos), sit;
@@ -1253,7 +1266,7 @@ size_t text_find_prev(Text *txt, size_t pos, const char *s)
 		return pos;
 	while(iterator_byte_prev(&it, &c))
 	{
-		if (c == s[matched]) 
+		if (c == s[matched])
 		{
 			if (matched == 0)
 				return it.pos;
@@ -1261,7 +1274,7 @@ size_t text_find_prev(Text *txt, size_t pos, const char *s)
 				sit = it;
 			matched--;
 		}
-		else if (matched < len - 1) 
+		else if (matched < len - 1)
 		{
 			it = sit;
 			matched = len - 1;

@@ -26,11 +26,29 @@ int main(void)
 	printf("c for copy, t for cut, p for paste\n");
 	printf("f for search");
 	printf("----------------------------\n");
-	while ((c = getchar())!='!')
+	while ((c = getchar()))
 	{
 		while(getchar() != '\n');
 		switch (c)
 		{
+		case '!':
+			if (text_modified(txt)) {
+				printf("has not save file, save?\n");
+				printf("y for save, n for not save, c for cancel.\n");
+				switch (getchar())
+				{
+				case 'y':
+					text_save(txt,"2.txt");
+					break;
+				case 'n':
+					break;
+				case 'c':
+					continue;
+					break;
+				}
+			}
+			while (getchar() != '\n');
+			break;
 		case 'f':
 			switch (getchar())
 			{
@@ -51,6 +69,7 @@ int main(void)
 				fgets(str, 30, stdin);
 				delenter(str);
 				printf("find at :%d\n", text_find_next(txt, pos, str));
+				break;
 				break;
 			}
 			break;
@@ -77,7 +96,7 @@ int main(void)
 			text_paste(cli, txt, pos);
 			break;
 		case 's':
-			if (!text_save(txt, "C:\\Users\\Jinxiapu\\Desktop\\1.txt"))
+			if (!text_saveas(txt, "C:\\Users\\Jinxiapu\\Desktop\\1.txt"))
 				printf("save file failed.\n");
 			break;
 		case 'u':
@@ -113,6 +132,7 @@ int main(void)
 			break;
 		}
 		printf("---------------");
+		printf("file size %d", text_size(txt));
 		showfile(txt);
 		fflush(stdin);
 	}

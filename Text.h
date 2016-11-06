@@ -1,4 +1,4 @@
-#ifndef __TEXT_H__ 
+#ifndef __TEXT_H__
 #define __TEXT_H__
 
 #include "util.h"
@@ -30,17 +30,17 @@ typedef struct ClipBorad ClipBorad;
 
 /* Filerange means range in bytes from start of the file to the end. */
 typedef struct {
-	size_t start; 
+	size_t start;
 	size_t end;
 } Filerange;
 
 /* Iterator used to iterate when do something like searching, showing... */
 typedef struct {
 	const char *start;  /* data of this piece: [start, end) */
-	const char *end;    
+	const char *end;
 	const char *text;   /* current position(start <= text < end) */
 	const Piece *piece; /* internal state do not touch! */
-	size_t pos;         
+	size_t pos;
 } Iterator;
 
 
@@ -52,13 +52,13 @@ Text *text_load(const char *filename);
 /* Release all ressources associated with this text instance */
 void text_free(Text* txt);
 /* Save the whole text to the given `filename'. Return true if succesful.
-* In which case an implicit snapshot is taken. The save might associate a
-* new inode to file. */
-bool text_save(Text*, const char *filename);
-/* write the text content to the given file descriptor `fd'. Return the
-* number of bytes written or -1 in case there was an error. */
-int text_write(Text*, int fd);
-int text_write_range(Text *txt, Filerange *range, int fd);
+*/
+bool text_saveas(Text*, const char *filename);
+/*
+* Save the whole text to txt->filename. Return 1 if succesful.
+* return 0 if failed. return 2 if txt->filename = NULL.
+*/
+int text_save(Text*);
 
 /* Functions for editing. */
 
@@ -73,8 +73,6 @@ bool text_delete_range(Text *txt, Filerange *r);
 size_t text_range_size(const Filerange *r);
 size_t text_size(Text *txt);
 
-/* Functions for re/undo. */
-void text_snapshot(Text *txt);
 /* undo/redo to the last snapshotted state. returns the position where
 * the change occured or EPOS if nothing could be {un,re}done. */
 size_t text_undo(Text*);
@@ -94,7 +92,7 @@ bool iterator_byte_prev(Iterator *it, char *b);
 
 /* close clipborad. free all source. */
 void clipborad_close(ClipBorad *cli);
-/* malloc an area for clipborad, size is CONFIG_CLIPBORAD_SIZE. 
+/* malloc an area for clipborad, size is CONFIG_CLIPBORAD_SIZE.
 * which means you can not copy or cut str longer than CONFIG_CLOPBOAD_SIZE.
 */
 ClipBorad *clipborad_init(void);
@@ -110,8 +108,10 @@ bool text_cut(ClipBorad *cli, Text *txt, Filerange *r);
 * text content begin at 0.
 */
 bool text_paste(ClipBorad *cli, Text *txt, size_t pos);
+bool text_null_file(Text* txt);
+bool text_modified(Text *txt);
 
-/* text_find_next/prev return pos when not find. 
+/* text_find_next/prev return pos when not find.
 * when finded, return the find pos.
 * s must be a string not a char array.
 */

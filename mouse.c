@@ -44,7 +44,6 @@ void draw_cursor(int x,int y)
 
 bool initmouse(void)
 {
-    freopen("gui.log","w",stdout);
     _AX = 0x00;
     geninterrupt(0x33);
     if(!_AX)

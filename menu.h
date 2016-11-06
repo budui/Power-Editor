@@ -17,15 +17,11 @@
 #define MENU_MAIN_EDIT 7
 #define MENU_SUB_UNDO 8
 #define MENU_SUB_REDO 9
-#define MENU_SUB_CUT 10
-#define MENU_SUB_COPY 11
-#define MENU_SUB_PASTE 12
-#define MENU_SUB_DEL 13
-#define MENU_SUB_FIND 14
-#define MENU_SUB_REPLACE 15
+#define MENU_SUB_FIND 10
+#define MENU_SUB_REPLACE 11
 
-#define MENU_MAIN_HELP 16
-#define MENU_SUB_ABOUT 17
+#define MENU_MAIN_HELP 12
+#define MENU_SUB_ABOUT 13
 
 typedef struct menu *menuptr;
 

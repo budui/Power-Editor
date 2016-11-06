@@ -22,7 +22,7 @@
 bool vga_init(void);
 void vga_close(void);
 /* draw the main window of the GUI. */
-void view_main_window(const char *name, colors barcolor);
+void view_main_window(void);
 /* draw the main menu of the GUI. */
 int view_main_menu(const menuptr root);
 
@@ -30,9 +30,9 @@ int view_main_menu(const menuptr root);
 */
 bool clickclosebutton(int x,int y,int button);
 void get_main_menu_choice(menuptr root);
-
+void get_sub_menu_choice(menuptr m);
 void menu_key_manager(menuptr root);
 char *inputbox_manager(char *message);
 void messagebox_manager(char * message);
-
+int judgebox_manager(char * message);
 #endif

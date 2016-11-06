@@ -10,7 +10,7 @@
 #include "mouse.h"
 #include "config.h"
 #include "key.h"
-
+#include "editor.h"
 #define SUBMENU 1
 #define MAINMENU 2
 
@@ -46,7 +46,6 @@ static void draw_closebutt(int x1,int y1);
 static void draw_icon(int x1,int y1);
 static void draw_button(int x1,int y1,char *str);
 static void draw_shadow(int x1,int y1,int x2,int y2, int flag,int inner);
-static void get_sub_menu_choice(menuptr m);
 static bool sub_menu_hidden(char far *buf,int x,int y);
 static char far *sub_menu_show(menuptr m);
 static char far *inputbox_show(char *);
@@ -203,7 +202,7 @@ bool clickclosebutton(int x,int y,int button)
     return (x >= x1 && x <= x2 && y >= y1 && y <= y2);
 }
 
-void view_main_window()
+void view_main_window(void)
 {
     //biggest window.
     draw_shadow(WINDOW_MINX,WINDOW_MINY,WINDOW_MAXX,WINDOW_MAXY,SHADOW_OUT,LIGHTGRAY);
@@ -232,57 +231,6 @@ int view_main_menu(const menuptr root)
             x += MAIN_MENU_WIDTH;
     } while((m = NextBroMenu(m)) != NULL);
     return x;
-}
-
-bool view_run_func(menuptr m)
-{
-    int func = MenuID(m);
-    switch(func)
-    {
-    case MENU_MAIN_FILE:
-    case MENU_MAIN_EDIT:
-    case MENU_MAIN_HELP:
-        get_sub_menu_choice(m);
-        break;
-    case MENU_SUB_NEWFILE:
-        outtextxy(100,100,"aaaa");
-        break;
-    case MENU_SUB_OPENFILE:
-        inputbox_manager("");
-        break;
-    case MENU_SUB_SAVE:
-        break;
-    case MENU_SUB_SAVEAS:
-        inputbox_manager("");
-        break;
-    case MENU_SUB_EXIT:
-        break;
-    case MENU_SUB_UNDO:
-        break;
-    case MENU_SUB_REDO:
-        break;
-    case MENU_SUB_CUT:
-        break;
-    case MENU_SUB_COPY:
-        break;
-    case MENU_SUB_PASTE:
-        break;
-    case MENU_SUB_DEL:
-        break;
-    case MENU_SUB_FIND:
-        break;
-    case MENU_SUB_REPLACE:
-        break;
-    case MENU_SUB_ABOUT:
-        messagebox_manager("made by WR&FZY");
-        break;
-    default:
-#ifdef DEBUG
-        fprintf(stderr,"select func and run func failed.\n");
-#endif
-        return false;
-    }
-    return true;
 }
 
 static char far *sub_menu_show(menuptr m)
@@ -386,13 +334,11 @@ void get_main_menu_choice(menuptr root)
 
                     /* main menu is clicked. */
                     main_menu_change(choice,MAIN_BORDER_IN);
-                    //hidemouseptr();
-                    if(!view_run_func(GetMenuByNum(root,choice)))
+                    if(!editor_run_func(GetMenuByNum(root,choice),false,0))
                     {
                         outtext("run func failed.");
                     }
                     main_menu_change(choice,MAIN_BORDER_QUIT);
-                    //showmouseptr();
                     return;
                 }
             }
@@ -412,7 +358,7 @@ void get_main_menu_choice(menuptr root)
     main_menu_change(choice,MAIN_BORDER_QUIT);
 }
 
-static void get_sub_menu_choice(menuptr m)
+void get_sub_menu_choice(menuptr m)
 {
     menuptr root =  GetRootMenu(m);
     int n = MenuChildNum(root,m);
@@ -477,9 +423,9 @@ static void get_sub_menu_choice(menuptr m)
                 if(x>=x1 && x<=x2 && y>=y1 && y<=y2)
                 {
                     sub_menu_hidden(buf,x1,y1);
-                    if(!view_run_func(GetMenuByNum(m,choice)))
+                    if(!editor_run_func(GetMenuByNum(m,choice),false,0))
                     {
-                        outtext("run func failed.");
+                         outtext("run func failed.");
                     }
                     return;
                 }
@@ -578,7 +524,7 @@ void menu_key_manager(menuptr root)
                 case ENTER:
                     if(choice){
                         sub_menu_hidden(buf,x1,SUB_MENU_Y);
-                        view_run_func(GetMenuByNum(m,choice));
+                        editor_run_func(GetMenuByNum(m,choice),false,0);
                         choice = MenuChildNum(root,m);
                         main_menu_change(choice,MAIN_BORDER_QUIT);
                         return;
@@ -796,3 +742,91 @@ char *inputbox_manager(char *message)
     }
 }
 
+#define JUDGEBOX_MINX 170
+#define JUDGEBOX_MINY 150
+#define JUDGEBOX_MAXX 490
+#define JUDGEBOX_MAXY 250
+static void judgebox_hidden(char far *buf)
+{
+    if(!buf)
+        return;
+    hidemouseptr();
+    putimage(JUDGEBOX_MINX,JUDGEBOX_MINY,buf,COPY_PUT);
+    farfree(buf);
+    showmouseptr();
+}
+
+static char far *judgebox_show(char *message)
+{
+    char far *buf;
+    int x1 = JUDGEBOX_MINX;
+    int y1 = JUDGEBOX_MINY;
+    int x2 = JUDGEBOX_MAXX;
+    int y2 = JUDGEBOX_MAXY;
+    buf = (char far*)farmalloc(imagesize(x1,y1,x2+2,y2+2));
+    if(!buf)
+        return NULL;
+    hidemouseptr();
+    getimage(x1,y1,x2+2,y2+2,buf);
+    //biggest window.
+    draw_shadow(x1,y1,x2,y2,SHADOW_OUT,LIGHTGRAY);
+    //name bar.
+    setfillstyle(SOLID_FILL,BLUE);
+    bar(x1+3,y1+3,x2-3,y1+19);
+    //editor name.
+    settextstyle(SMALL_FONT,0,5);
+    setcolor(WHITE);
+    outtextxy(x1+25,y1+2,EDITOR_NAME);
+    //button
+    draw_closebutt(x2-15,y1+8);
+    draw_button(x1+20,y1+60,"");
+    draw_button(x1+134,y1+60,"");
+    draw_button(x1+250,y1+60,"");
+    //icon
+    draw_icon(x1+7,y1-1);
+    print_str_xy(message,x1 + 20,y1 +30);
+    showmouseptr();
+    return buf;
+}
+
+
+int judgebox_manager(char * message)
+{
+    int button,mousex,mousey;
+    char far *buf = judgebox_show(message);
+    int key;
+    while(1)
+    {
+        if(!getmousepos(&button,&mousex,&mousey))
+            continue;
+        if(!button)
+            bioskey(0);
+        else if(button == MOUSE_LEFTPRESS)
+        {
+            if(mousex>=JUDGEBOX_MINX+20&&mousex<=JUDGEBOX_MINX+20+BUTTON_SIZE_X\
+                &&mousey>=JUDGEBOX_MINY+60&&mousey<=JUDGEBOX_MINY+60+BUTTON_SIZE_Y)
+            { //yes button
+                judgebox_hidden(buf);
+                return 1;
+            }
+            if(mousex>=JUDGEBOX_MINX+134&&mousex<=JUDGEBOX_MINX+134+BUTTON_SIZE_X\
+                &&mousey>=JUDGEBOX_MINY+60&&mousey<=JUDGEBOX_MINY+60+BUTTON_SIZE_Y)
+            { //no button
+                judgebox_hidden(buf);
+                return 2;
+            }
+            if(mousex>=JUDGEBOX_MINX+250&&mousex<=JUDGEBOX_MINX+250+BUTTON_SIZE_X\
+                &&mousey>=JUDGEBOX_MINY+60&&mousey<=JUDGEBOX_MINY+60+BUTTON_SIZE_Y)
+            { //cancel button
+                judgebox_hidden(buf);
+                return 0;
+            }
+            if(mousex>=JUDGEBOX_MAXX-20 && mousex<=JUDGEBOX_MAXX-6 \
+                && mousey>=JUDGEBOX_MINY-1 && mousey<=JUDGEBOX_MINY+17)
+            { //close button
+                judgebox_hidden(buf);
+                return 0;
+            }
+        }
+    }
+}
