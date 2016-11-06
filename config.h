@@ -10,7 +10,7 @@
 #define CONFIG_CN_SIZE 16
 #define CONFIG_EN_SIZE 8
 
-#define CONFIG_MAIN_MEMU_NUM 4
+#define CONFIG_MAIN_MEMU_NUM 3
 
 #define CONFIG_FILE_TRUNCATE_SIZE ((size_t) 1 << 15)
 #define CONFIG_CLIPBORAD_SIZE ((size_t) 1 << 10)

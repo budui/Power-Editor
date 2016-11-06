@@ -134,6 +134,7 @@ int print_str_xy(const char *s, int x,int y)
         }
         else
         {
+            setcolor(BLACK);
             settextstyle(0,HORIZ_DIR,2);
             outtextxy(x,y,s);
             x += 16;

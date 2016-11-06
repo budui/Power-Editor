@@ -44,6 +44,7 @@ static void sub_menu_change(int x1,int choice,int flag);
 static void main_menu_change(int choice, int flag);
 static void draw_closebutt(int x1,int y1);
 static void draw_icon(int x1,int y1);
+static void draw_button(int x1,int y1,char *str);
 static void draw_shadow(int x1,int y1,int x2,int y2, int flag,int inner);
 static void get_sub_menu_choice(menuptr m);
 static bool sub_menu_hidden(char far *buf,int x,int y);
@@ -97,6 +98,7 @@ static void draw_closebutt(int x,int y)
 static void draw_icon(int x1,int y1)
 {
     setcolor(YELLOW);
+    settextstyle(SMALL_FONT,0,5);
     outtextxy(x1,y1,"/");
     outtextxy(x1+1,y1,"/");
     outtextxy(x1+2,y1+2,"/");
@@ -272,6 +274,7 @@ bool view_run_func(menuptr m)
     case MENU_SUB_REPLACE:
         break;
     case MENU_SUB_ABOUT:
+        messagebox_manager("made by WR&FZY");
         break;
     default:
 #ifdef DEBUG
@@ -599,19 +602,80 @@ void menu_key_manager(menuptr root)
         main_menu_change(choice,MAIN_BORDER_QUIT);
     }
 }
-/*
+#define MESSAGEBOX_MINX 180
+#define MESSAGEBOX_MINY 150
+#define MESSAGEBOX_MAXX 480
+#define MESSAGEBOX_MAXY 250
 static void messagebox_hidden(char far *buf)
 {
-
+    if(!buf)
+        return;
+    hidemouseptr();
+    putimage(MESSAGEBOX_MINX,MESSAGEBOX_MINY,buf,COPY_PUT);
+    farfree(buf);
+    showmouseptr();
 }
-static char far *messagebox_show(char * message)
-{
 
+static char far *messagebox_show(char *message)
+{
+    char far *buf;
+    buf = (char far*)farmalloc(imagesize(MESSAGEBOX_MINX,MESSAGEBOX_MINY,MESSAGEBOX_MAXX+2,MESSAGEBOX_MAXY+2));
+    if(!buf)
+        return NULL;
+    hidemouseptr();
+    getimage(MESSAGEBOX_MINX,MESSAGEBOX_MINY,MESSAGEBOX_MAXX+2,MESSAGEBOX_MAXY+2,buf);
+    //biggest window.
+    draw_shadow(MESSAGEBOX_MINX,MESSAGEBOX_MINY,MESSAGEBOX_MAXX,MESSAGEBOX_MAXY,SHADOW_OUT,LIGHTGRAY);
+    //name bar.
+    setfillstyle(SOLID_FILL,BLUE);
+    bar(MESSAGEBOX_MINX+3,MESSAGEBOX_MINY+3,MESSAGEBOX_MAXX-3,MESSAGEBOX_MINY+19);
+    //editor name.
+    settextstyle(SMALL_FONT,0,5);
+    setcolor(WHITE);
+    outtextxy(MESSAGEBOX_MINX+25,MESSAGEBOX_MINY+2,EDITOR_NAME);
+    //button
+    draw_closebutt(MESSAGEBOX_MAXX-15,MESSAGEBOX_MINY+8);
+    draw_button(MESSAGEBOX_MINX+110,MESSAGEBOX_MINY+60,"ȷ?");
+    //icon
+    draw_icon(MESSAGEBOX_MINX+7,MESSAGEBOX_MINY-1);
+    print_str_xy(message,MESSAGEBOX_MINX + 20,MESSAGEBOX_MINY +30);
+    showmouseptr();
+    return buf;
 }
-void view_messagebox(char * message)
-{
 
-}*/
+
+#define BUTTON_SIZE_X 46
+#define BUTTON_SIZE_Y 23
+void messagebox_manager(char * message)
+{
+    int button,mousex,mousey;
+    char far *buf = messagebox_show(message);
+    while(1)
+    {
+        if(!getmousepos(&button,&mousex,&mousey))
+            continue;
+        if(bioskey(1) && bioskey(0)==ENTER)
+        {
+            messagebox_hidden(buf);
+            return;
+        }
+        else if(button == MOUSE_LEFTPRESS)
+        {
+            if(mousex>=MESSAGEBOX_MINX+110&&mousex<=MESSAGEBOX_MINX+110+BUTTON_SIZE_X\
+                &&mousey>=MESSAGEBOX_MINY+60&&mousey<=MESSAGEBOX_MINY+60+BUTTON_SIZE_Y)
+            { //yes button
+                messagebox_hidden(buf);
+                return;
+            }
+            if(mousex>=MESSAGEBOX_MAXX-20 && mousex<=MESSAGEBOX_MAXX-6 \
+                && mousey>=MESSAGEBOX_MINY-1 && mousey<=MESSAGEBOX_MINY+17)
+			{ //close button
+                messagebox_hidden(buf);
+                return;
+            }
+        }
+    }
+}
 
 
 
@@ -625,8 +689,6 @@ static void inputbox_hidden(char far* buf)
     showmouseptr();
 }
 
-#define BUTTON_SIZE_X 46
-#define BUTTON_SIZE_Y 23
 static void draw_button(int x1,int y1,char *str)
 {
     int x2 = x1 + BUTTON_SIZE_X;
@@ -638,7 +700,7 @@ static void draw_button(int x1,int y1,char *str)
     setcolor(DARKGRAY);
     line(x2,y2,x2,y1);
     line(x2,y2,x1,y2);
-    print_str_xy(str,x1+7,y1+3);
+    print_str_xy(str,x1+8,y1+3);
 }
 
 static char far *inputbox_show(char *message)

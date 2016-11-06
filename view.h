@@ -33,4 +33,6 @@ void get_main_menu_choice(menuptr root);
 
 void menu_key_manager(menuptr root);
 char *inputbox_manager(char *message);
+void messagebox_manager(char * message);
+
 #endif
